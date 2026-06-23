@@ -1,0 +1,17 @@
+{
+  "name": "trader-desk-backend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.1.0",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "ws": "^8.21.0"
+  }
+}
