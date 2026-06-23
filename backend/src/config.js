@@ -58,3 +58,5 @@ export const BOT_TIMEFRAMES = ['1m', '5m', '15m', '1h'];
 export const POLL_INTERVAL_MS = 3000; // Coinbase polling cadence
 export const STATS_EVERY_TICKS = 5; // refresh 24h open/high/low every Nth poll
 export const PERSIST_EVERY_TICKS = 5; // store a tick row every Nth poll
+export const TICK_RETENTION_DAYS = 7; // purge persisted ticks older than this
+export const TICK_CLEANUP_INTERVAL_MS = 6 * 60 * 60 * 1000; // purge cadence (6h)

@@ -12,6 +12,7 @@ import {
   getBotStats,
   getAccount,
   getPositions,
+  getPosition,
 } from './db.js';
 import { fetchKlines, getPrice, getPriceMap } from './market.js';
 import { placeOrder } from './engine.js';
@@ -150,13 +151,27 @@ async function closeTrade(trade, reason) {
     const claimed = await claimBotTrade(trade.id);
     if (!claimed) return;
     try {
-      const orderSide = trade.side === 'long' ? 'sell' : 'buy';
-      const { order } = await placeOrder({ symbol, side: orderSide, type: 'market', qty: trade.qty }, getPrice);
-      const exit = order.fillPrice;
-      const pnl = trade.side === 'long' ? (exit - trade.entryPrice) * trade.qty : (trade.entryPrice - exit) * trade.qty;
+      // The book is shared with manual trading. Never close more than the book
+      // actually holds in our direction — otherwise a manual close/flip of the
+      // underlying would make this "close" open an *opposite* position.
+      const pos = await getPosition(symbol);
+      const available = trade.side === 'long' ? Math.max(0, pos) : Math.max(0, -pos);
+      const closeQty = Math.min(trade.qty, available);
+      let exit = getPrice(symbol) ?? trade.entryPrice;
+      if (closeQty > 0) {
+        const orderSide = trade.side === 'long' ? 'sell' : 'buy';
+        const { order } = await placeOrder({ symbol, side: orderSide, type: 'market', qty: closeQty }, getPrice);
+        exit = order.fillPrice;
+      } else {
+        // Underlying already flat (closed manually) — settle the trade for the
+        // bot's books at the current mark, without touching the position.
+        reason = `${reason}/flat`;
+      }
+      const settledQty = closeQty > 0 ? closeQty : trade.qty;
+      const pnl = trade.side === 'long' ? (exit - trade.entryPrice) * settledQty : (trade.entryPrice - exit) * settledQty;
       await finalizeBotTrade(trade.id, exit, reason, pnl);
       cooldownUntil.set(symbol, Date.now() + config.cooldownSec * 1000);
-      console.log(`[bot] CLOSE ${trade.side} ${symbol} @ ${exit} (${reason}) pnl=${pnl.toFixed(2)}`);
+      console.log(`[bot] CLOSE ${trade.side} ${symbol} @ ${exit} (${reason}) qty=${closeQty} pnl=${pnl.toFixed(2)}`);
     } catch (e) {
       await revertBotTrade(trade.id); // restore so TP/SL stays managed
       throw e;

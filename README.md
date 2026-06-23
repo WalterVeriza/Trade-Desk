@@ -135,3 +135,9 @@ first boot (`backend/src/db.js`), idempotent.
 - **Short buying power.** A sell that opens or grows a short is allowed only while
   total gross short notional stays within equity (1×, no leverage) — without this
   a short would be unbounded.
+- **Tick retention.** Persisted ticks are purged past a retention window
+  (`TICK_RETENTION_DAYS`, default 7) on a periodic sweep so the table can't grow
+  without bound on the Neon free tier.
+- **Bot ↔ book reconciliation.** The strategy bot never closes more than the book
+  actually holds in its direction, so manually closing a position the bot is
+  managing can't make its TP/SL open an opposite position.

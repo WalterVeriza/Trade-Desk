@@ -151,6 +151,11 @@ export async function getPositions() {
   }));
 }
 
+export async function getPosition(symbol) {
+  const rows = await sql`SELECT qty FROM positions WHERE symbol = ${symbol}`;
+  return rows.length ? Number(rows[0].qty) : 0;
+}
+
 export async function getOrders(status) {
   const rows = status
     ? await sql.query(

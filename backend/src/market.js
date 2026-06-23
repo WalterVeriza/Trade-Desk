@@ -5,6 +5,8 @@ import {
   POLL_INTERVAL_MS,
   STATS_EVERY_TICKS,
   PERSIST_EVERY_TICKS,
+  TICK_RETENTION_DAYS,
+  TICK_CLEANUP_INTERVAL_MS,
 } from './config.js';
 import { matchOpenOrders } from './engine.js';
 
@@ -144,6 +146,18 @@ async function persistTicks(snaps) {
   }
 }
 
+// The ticks table grows ~every poll forever; trim rows past the retention window
+// so it doesn't bloat the database (and the Neon free tier) indefinitely.
+async function cleanupOldTicks() {
+  try {
+    await sql.query('DELETE FROM ticks WHERE ts < now() - make_interval(days => $1)', [
+      TICK_RETENTION_DAYS,
+    ]);
+  } catch (e) {
+    console.error('[market] tick cleanup error:', e.message);
+  }
+}
+
 export async function fetchKlines(symbol, interval = '1m', limit = 120) {
   if (!SYMBOL_SET.has(symbol)) throw new Error('Unknown symbol');
   const meta = SYMBOLS.find((s) => s.symbol === symbol);
@@ -184,5 +198,7 @@ export async function startMarketFeed() {
   setInterval(() => {
     pollOnce().catch((e) => console.error('[market] poll error:', e.message));
   }, POLL_INTERVAL_MS);
+  cleanupOldTicks();
+  setInterval(cleanupOldTicks, TICK_CLEANUP_INTERVAL_MS);
   console.log(`[market] Coinbase live feed started for ${SYMBOLS.length} symbols @ ${POLL_INTERVAL_MS}ms`);
 }
