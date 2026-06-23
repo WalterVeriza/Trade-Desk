@@ -1,16 +1,36 @@
 import { sql } from './db.js';
-import { SYMBOLS, SYMBOL_SET, POLL_INTERVAL_MS, PERSIST_EVERY_TICKS } from './config.js';
+import {
+  SYMBOLS,
+  SYMBOL_SET,
+  POLL_INTERVAL_MS,
+  STATS_EVERY_TICKS,
+  PERSIST_EVERY_TICKS,
+} from './config.js';
 import { matchOpenOrders } from './engine.js';
 
-const BINANCE = 'https://api.binance.com/api/v3';
+// Coinbase Exchange public API — globally reachable (incl. US cloud hosts like
+// Render), no API key required.
+const CB = 'https://api.exchange.coinbase.com';
+const HEADERS = { 'User-Agent': 'trader-desk', Accept: 'application/json' };
 
-// In-memory live market snapshot + short rolling history for sparklines.
+// Map our interval labels to Coinbase candle granularities (seconds).
+const GRANULARITY = {
+  '1m': 60,
+  '5m': 300,
+  '15m': 900,
+  '1h': 3600,
+  '6h': 21600,
+  '1d': 86400,
+};
+
+// In-memory live snapshot + rolling sparkline history + slow-moving 24h stats.
 const cache = new Map(); // symbol -> snapshot
-const history = new Map(); // symbol -> number[] (recent prices)
+const history = new Map(); // symbol -> number[]
+const stats24 = new Map(); // symbol -> { open, high, low }
 const HISTORY_LEN = 60;
 
 let pollCount = 0;
-let onUpdate = null; // broadcast callback set by index.js
+let onUpdate = null;
 
 export function setBroadcast(fn) {
   onUpdate = fn;
@@ -34,39 +54,70 @@ export function getSparkline(symbol) {
   return history.get(symbol) ?? [];
 }
 
+async function cbJson(path) {
+  const res = await fetch(CB + path, { headers: HEADERS });
+  if (!res.ok) throw new Error(`Coinbase ${res.status} ${path}`);
+  return res.json();
+}
+
+// 24h open/high/low changes slowly — refresh on a slower cadence than price.
+async function refreshStats() {
+  await Promise.all(
+    SYMBOLS.map(async (s) => {
+      try {
+        const st = await cbJson(`/products/${s.cbProduct}/stats`);
+        stats24.set(s.symbol, {
+          open: Number(st.open),
+          high: Number(st.high),
+          low: Number(st.low),
+        });
+      } catch {
+        /* keep previous stats */
+      }
+    })
+  );
+}
+
 async function pollOnce() {
-  const symbolsParam = JSON.stringify(SYMBOLS.map((s) => s.symbol));
-  const url = `${BINANCE}/ticker/24hr?symbols=${encodeURIComponent(symbolsParam)}`;
-  const res = await fetch(url, { headers: { Accept: 'application/json' } });
-  if (!res.ok) throw new Error(`Binance ${res.status}`);
-  const data = await res.json();
+  if (pollCount % STATS_EVERY_TICKS === 0) await refreshStats();
 
   const updated = [];
-  for (const t of data) {
-    if (!SYMBOL_SET.has(t.symbol)) continue;
-    const meta = SYMBOLS.find((s) => s.symbol === t.symbol);
-    const snap = {
-      symbol: t.symbol,
-      name: meta.name,
-      base: meta.base,
-      quote: meta.quote,
-      price: Number(t.lastPrice),
-      changePct: Number(t.priceChangePercent),
-      change: Number(t.priceChange),
-      high: Number(t.highPrice),
-      low: Number(t.lowPrice),
-      volume: Number(t.quoteVolume),
-      bid: Number(t.bidPrice),
-      ask: Number(t.askPrice),
-      ts: Date.now(),
-    };
-    cache.set(t.symbol, snap);
-    const h = history.get(t.symbol) ?? [];
-    h.push(snap.price);
-    if (h.length > HISTORY_LEN) h.shift();
-    history.set(t.symbol, h);
-    updated.push(snap);
-  }
+  await Promise.all(
+    SYMBOLS.map(async (s) => {
+      try {
+        const tk = await cbJson(`/products/${s.cbProduct}/ticker`);
+        const price = Number(tk.price);
+        if (!(price > 0)) return;
+        const st = stats24.get(s.symbol) || {};
+        const open = st.open ?? price;
+        const change = price - open;
+        const volBase = Number(tk.volume) || 0;
+        const snap = {
+          symbol: s.symbol,
+          name: s.name,
+          base: s.base,
+          quote: s.quote,
+          price,
+          changePct: open ? (change / open) * 100 : 0,
+          change,
+          high: Math.max(st.high ?? price, price),
+          low: Math.min(st.low ?? price, price),
+          volume: volBase * price, // approximate USD (quote) volume
+          bid: Number(tk.bid) || price,
+          ask: Number(tk.ask) || price,
+          ts: Date.now(),
+        };
+        cache.set(s.symbol, snap);
+        const h = history.get(s.symbol) ?? [];
+        h.push(price);
+        if (h.length > HISTORY_LEN) h.shift();
+        history.set(s.symbol, h);
+        updated.push(snap);
+      } catch {
+        /* keep previous cache entry on transient failure */
+      }
+    })
+  );
 
   // Fill any resting limit orders the market has crossed.
   let fills = [];
@@ -76,7 +127,6 @@ async function pollOnce() {
     console.error('[market] order matching error:', e.message);
   }
 
-  // Persist a tick snapshot periodically (keeps DB writes bounded).
   pollCount += 1;
   if (pollCount % PERSIST_EVERY_TICKS === 0) {
     persistTicks(updated).catch((e) => console.error('[market] persist error:', e.message));
@@ -96,21 +146,24 @@ async function persistTicks(snaps) {
 
 export async function fetchKlines(symbol, interval = '1m', limit = 120) {
   if (!SYMBOL_SET.has(symbol)) throw new Error('Unknown symbol');
-  const url = `${BINANCE}/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Binance klines ${res.status}`);
-  const raw = await res.json();
-  return raw.map((k) => ({
-    time: k[0],
-    open: Number(k[1]),
-    high: Number(k[2]),
-    low: Number(k[3]),
-    close: Number(k[4]),
-    volume: Number(k[5]),
-  }));
+  const meta = SYMBOLS.find((s) => s.symbol === symbol);
+  const granularity = GRANULARITY[interval] || 60;
+  // Coinbase returns up to 300 rows, newest-first: [time, low, high, open, close, volume].
+  const raw = await cbJson(`/products/${meta.cbProduct}/candles?granularity=${granularity}`);
+  return raw
+    .slice(0, limit)
+    .reverse()
+    .map((k) => ({
+      time: k[0] * 1000,
+      low: k[1],
+      high: k[2],
+      open: k[3],
+      close: k[4],
+      volume: k[5],
+    }));
 }
 
-// Seed rolling history from Binance so sparklines are populated immediately.
+// Seed rolling history from 1-minute candles so sparklines are populated at boot.
 async function seedHistory() {
   await Promise.all(
     SYMBOLS.map(async (s) => {
@@ -125,10 +178,11 @@ async function seedHistory() {
 }
 
 export async function startMarketFeed() {
+  await refreshStats();
   await seedHistory();
   await pollOnce().catch((e) => console.error('[market] first poll failed:', e.message));
   setInterval(() => {
     pollOnce().catch((e) => console.error('[market] poll error:', e.message));
   }, POLL_INTERVAL_MS);
-  console.log(`[market] live feed started for ${SYMBOLS.length} symbols @ ${POLL_INTERVAL_MS}ms`);
+  console.log(`[market] Coinbase live feed started for ${SYMBOLS.length} symbols @ ${POLL_INTERVAL_MS}ms`);
 }

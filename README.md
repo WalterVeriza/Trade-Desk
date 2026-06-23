@@ -8,8 +8,10 @@ custom **dark-themed** React interface.
 
 ## What it does
 
-- **Live market data** for 8 symbols, pulled from the public **Binance** REST API
-  every 2 s (no API key required): BTC, ETH, BNB, SOL, XRP, ADA, DOGE, AVAX.
+- **Live market data** for 8 symbols, pulled from the public **Coinbase** REST API
+  every 3 s (no API key required): BTC, ETH, BNB, SOL, XRP, ADA, DOGE, AVAX.
+  (Coinbase is used instead of Binance because Binance returns HTTP 451 to US
+  cloud IPs such as Render's.)
 - **Real-time UI** — the backend pushes ticks to the browser over a WebSocket; the
   watchlist, chart, positions and P&L all update live.
 - **Order management** — market & limit orders, resting limit orders that fill when
@@ -25,7 +27,7 @@ custom **dark-themed** React interface.
 ## Architecture
 
 ```
-Binance REST ──poll 2s──> Backend (Express + ws)  ──WebSocket──> React UI (Vite)
+Coinbase REST ─poll 3s─> Backend (Express + ws)  ──WebSocket──> React UI (Vite)
                                │
                                └── Neon Postgres (HTTPS driver)
 ```
@@ -34,7 +36,7 @@ Binance REST ──poll 2s──> Backend (Express + ws)  ──WebSocket──>
 |----------|--------------------------------------------------------------|
 | Backend  | Node 20+, Express 5, `ws`, `@neondatabase/serverless`        |
 | Frontend | React 18, Vite, custom CSS, canvas candlestick chart         |
-| Data     | Binance public API (prices + klines)                         |
+| Data     | Coinbase public API (prices + candles)                         |
 | Storage  | Neon Postgres                                                |
 
 ## Running it
@@ -101,7 +103,7 @@ Node continuously (Render shown here; Railway / Fly.io work the same way).
 |--------|-----------------------------|------------------------------------------|
 | GET    | `/api/state`                | Full bootstrap snapshot                  |
 | GET    | `/api/market`               | Latest snapshot for all 8 symbols        |
-| GET    | `/api/klines/:symbol`       | Candlestick history (Binance proxy)      |
+| GET    | `/api/klines/:symbol`       | Candlestick history (Coinbase proxy)     |
 | GET    | `/api/positions`            | Open positions with cost basis           |
 | GET    | `/api/orders?status=open`   | Orders (optionally filtered)             |
 | POST   | `/api/orders`               | Place an order                           |

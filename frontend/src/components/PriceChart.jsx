@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
 import { fmtPrice, fmtPct, signClass } from '../format.js';
 
-const INTERVALS = ['1m', '5m', '15m', '1h', '4h', '1d'];
+const INTERVALS = ['1m', '5m', '15m', '1h', '6h', '1d'];
 
 export default function PriceChart({ symbol, snapshot }) {
   const [interval, setInterval] = useState('1m');
