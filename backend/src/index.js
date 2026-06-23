@@ -20,9 +20,19 @@ import { placeOrder, cancelOrder, resetDesk } from './engine.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
-// Allow the Vercel frontend (set CORS_ORIGIN to its URL in production).
-// Defaults to reflecting the request origin so local dev works out of the box.
-app.use(cors({ origin: process.env.CORS_ORIGIN || true }));
+// Allow the Vercel frontend. CORS_ORIGIN may be a comma-separated list; trailing
+// slashes are tolerated (a browser Origin never has one, a common misconfig).
+// If CORS_ORIGIN is unset, reflect any origin so local dev works out of the box.
+const stripSlash = (s) => s.trim().replace(/\/+$/, '');
+const allowedOrigins = (process.env.CORS_ORIGIN || '').split(',').map(stripSlash).filter(Boolean);
+app.use(
+  cors({
+    origin(origin, cb) {
+      if (!origin || allowedOrigins.length === 0) return cb(null, true);
+      cb(null, allowedOrigins.includes(stripSlash(origin)));
+    },
+  })
+);
 app.use(express.json());
 
 // ----------------------------- REST API -----------------------------
