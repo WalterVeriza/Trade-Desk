@@ -1,5 +1,28 @@
 import { ema, rsi, macd, atr, adx, last, prev } from './indicators.js';
 
+// Advance a stop as a trade moves in profit. Returns the new stop level, which
+// only ever ratchets in the favorable direction (never loosens):
+//   - break-even: once price is +beAtR (in R) onside, move the stop to entry;
+//   - trailing:   keep the stop trailR (in R) behind the best price seen.
+// `best` = highest price since entry for a long, lowest for a short. R is the
+// initial risk (|entry - initSl|). Disabled knobs (0) are no-ops.
+export function manageStop(side, entry, sl, initSl, best, cfg) {
+  const risk = Math.abs(entry - (initSl ?? sl)) || 1;
+  const beAtR = cfg.beAtR ?? 0;
+  const trailR = cfg.trailR ?? 0;
+  let newSl = sl;
+  if (side === 'long') {
+    const moveR = (best - entry) / risk;
+    if (beAtR > 0 && moveR >= beAtR) newSl = Math.max(newSl, entry);
+    if (trailR > 0) newSl = Math.max(newSl, best - trailR * risk);
+  } else {
+    const moveR = (entry - best) / risk;
+    if (beAtR > 0 && moveR >= beAtR) newSl = Math.min(newSl, entry);
+    if (trailR > 0) newSl = Math.min(newSl, best + trailR * risk);
+  }
+  return newSl;
+}
+
 // Higher-timeframe trend bias from a candle series (oldest -> newest):
 // +1 bullish / -1 bearish / 0 unknown, based on price vs EMA200. Used by the
 // MTF filter so the bot only takes trades aligned with the bigger trend.

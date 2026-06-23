@@ -113,6 +113,9 @@ export async function initDb() {
       closed_at   TIMESTAMPTZ
     )`;
   await sql`CREATE INDEX IF NOT EXISTS bot_trades_status_idx ON bot_trades(status, opened_at DESC)`;
+  // The original stop, kept immutable so break-even/trailing can size risk in R
+  // even after `sl` has been ratcheted. Added separately for existing tables.
+  await sql`ALTER TABLE bot_trades ADD COLUMN IF NOT EXISTS init_sl NUMERIC`;
 
   await sql`
     INSERT INTO bot_state (id, enabled, config)
@@ -205,6 +208,7 @@ function mapBotTrade(r) {
     entryPrice: Number(r.entry_price),
     tp: Number(r.tp),
     sl: Number(r.sl),
+    initSl: r.init_sl == null ? Number(r.sl) : Number(r.init_sl),
     confidence: Number(r.confidence),
     status: r.status,
     exitPrice: r.exit_price == null ? null : Number(r.exit_price),
@@ -217,11 +221,16 @@ function mapBotTrade(r) {
 
 export async function insertBotTrade(t) {
   const rows = await sql.query(
-    `INSERT INTO bot_trades (symbol, side, qty, entry_price, tp, sl, confidence)
-     VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-    [t.symbol, t.side, t.qty, t.entryPrice, t.tp, t.sl, t.confidence]
+    `INSERT INTO bot_trades (symbol, side, qty, entry_price, tp, sl, init_sl, confidence)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+    [t.symbol, t.side, t.qty, t.entryPrice, t.tp, t.sl, t.sl, t.confidence]
   );
   return mapBotTrade(rows[0]);
+}
+
+// Persist a ratcheted stop (break-even / trailing) for an open trade.
+export async function updateBotTradeStop(id, sl) {
+  await sql.query("UPDATE bot_trades SET sl = $1 WHERE id = $2 AND status = 'open'", [sl, id]);
 }
 
 export async function getOpenBotTrades() {

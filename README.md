@@ -121,7 +121,8 @@ curl 'localhost:4000/api/bot/backtest?symbol=BTCUSDT&interval=5m&bars=800&adxMin
 Returns P&L in **R** (multiples of the risked stop distance), so results are
 independent of position sizing: `winRate`, `expectancyR`, `totalR`,
 `profitFactor`, `maxDrawdownR`. Optional query: `symbol`, `interval`, `bars`,
-and config overrides `confidenceMin`, `adxMin`, `atrSl`, `atrTp`, `mtfConfirm`.
+and config overrides `confidenceMin`, `adxMin`, `atrSl`, `atrTp`, `mtfConfirm`,
+`beAtR`, `trailR`.
 
 > ⚠️ This is an **in-sample** backtest over a short recent window — useful for
 > comparing parameters, **not** proof of edge. It models neither fees nor
@@ -171,3 +172,9 @@ first boot (`backend/src/db.js`), idempotent.
   per-trade expectancy, only lowering drawdown — a textbook example of validating
   an idea before shipping it. Toggle it on and re-run the backtest for your
   window/regime to decide.
+- **Break-even / trailing stops (`beAtR`, `trailR`, opt-in).** The stop can move
+  to break-even at +`beAtR` (in R) and/or trail `trailR` behind the best price.
+  Also **off by default**: a sweep showed every setting *lowered* expectancy vs a
+  plain fixed 1:2 stop/target — trailing truncates the +2R winners that carry a
+  trend strategy faster than it saves losers. Implemented and tunable, but the
+  data says the simple fixed target wins here.

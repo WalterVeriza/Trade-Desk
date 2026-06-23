@@ -50,6 +50,8 @@ export const DEFAULT_BOT_CONFIG = {
   atrSl: 1.5, // stop-loss distance = atrSl × ATR
   atrTp: 3, // take-profit distance = atrTp × ATR (R:R ≈ 1:2)
   adxMin: 20, // regime filter: skip entries when ADX is below this (no trend)
+  beAtR: 0, // move stop to break-even once +beAtR in profit (0 = off)
+  trailR: 0, // trail the stop trailR (in R) behind the best price (0 = off)
   mtfConfirm: false, // higher-TF trend filter (toggle). Off by default: the
   // backtest showed it cuts ~20% of trades without raising per-trade edge,
   // only lowering drawdown — so leave it opt-in rather than on by default.

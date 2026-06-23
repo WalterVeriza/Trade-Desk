@@ -13,10 +13,11 @@ import {
   getAccount,
   getPositions,
   getPosition,
+  updateBotTradeStop,
 } from './db.js';
 import { fetchKlines, getPrice, getPriceMap } from './market.js';
 import { placeOrder } from './engine.js';
-import { computeSignal, htfTrend } from './strategy.js';
+import { computeSignal, htfTrend, manageStop } from './strategy.js';
 
 let enabled = false;
 let config = { ...DEFAULT_BOT_CONFIG };
@@ -24,6 +25,7 @@ const signals = new Map(); // symbol -> latest signal (display)
 let openTrades = []; // in-memory mirror of open bot_trades
 const inFlight = new Set(); // symbols currently opening/closing (lock)
 const cooldownUntil = new Map(); // symbol -> timestamp; no re-entry before then
+const peak = new Map(); // trade id -> best favorable price since entry (for trailing)
 let scanning = false;
 let loopTimer = null;
 
@@ -77,6 +79,8 @@ export async function updateConfig(patch) {
   if (patch.atrSl != null) next.atrSl = num(patch.atrSl, 0.2, 10, config.atrSl);
   if (patch.atrTp != null) next.atrTp = num(patch.atrTp, 0.2, 20, config.atrTp);
   if (patch.adxMin != null) next.adxMin = num(patch.adxMin, 0, 60, config.adxMin);
+  if (patch.beAtR != null) next.beAtR = num(patch.beAtR, 0, 10, config.beAtR);
+  if (patch.trailR != null) next.trailR = num(patch.trailR, 0, 10, config.trailR);
   if (patch.mtfConfirm != null) next.mtfConfirm = !!patch.mtfConfirm;
   if (patch.maxPositions != null) next.maxPositions = Math.round(num(patch.maxPositions, 1, 8, config.maxPositions));
   if (patch.loopSec != null) next.loopSec = Math.round(num(patch.loopSec, 5, 120, config.loopSec));
@@ -172,6 +176,7 @@ async function closeTrade(trade, reason) {
       const settledQty = closeQty > 0 ? closeQty : trade.qty;
       const pnl = trade.side === 'long' ? (exit - trade.entryPrice) * settledQty : (trade.entryPrice - exit) * settledQty;
       await finalizeBotTrade(trade.id, exit, reason, pnl);
+      peak.delete(trade.id);
       cooldownUntil.set(symbol, Date.now() + config.cooldownSec * 1000);
       console.log(`[bot] CLOSE ${trade.side} ${symbol} @ ${exit} (${reason}) qty=${closeQty} pnl=${pnl.toFixed(2)}`);
     } catch (e) {
@@ -188,7 +193,8 @@ async function closeTrade(trade, reason) {
   }
 }
 
-// Called on every market tick: enforce TP/SL on open trades.
+// Called on every market tick: advance break-even/trailing stops, then enforce
+// TP/SL on open trades.
 export async function onTick() {
   if (!openTrades.length) return;
   const priceMap = getPriceMap();
@@ -196,12 +202,29 @@ export async function onTick() {
     if (inFlight.has(t.symbol)) continue;
     const px = priceMap[t.symbol];
     if (!px) continue;
+
+    const initSl = t.initSl ?? t.sl;
+    // Track the best favorable price and ratchet the stop (break-even / trailing).
+    const best = t.side === 'long'
+      ? Math.max(peak.get(t.id) ?? t.entryPrice, px)
+      : Math.min(peak.get(t.id) ?? t.entryPrice, px);
+    peak.set(t.id, best);
+    const newSl = manageStop(t.side, t.entryPrice, t.sl, initSl, best, config);
+    if (newSl !== t.sl) {
+      t.sl = newSl;
+      try {
+        await updateBotTradeStop(t.id, newSl);
+      } catch (e) {
+        console.error(`[bot] trail persist ${t.symbol}:`, e.message);
+      }
+    }
+
     if (t.side === 'long') {
       if (px >= t.tp) await closeTrade(t, 'tp');
-      else if (px <= t.sl) await closeTrade(t, 'sl');
+      else if (px <= t.sl) await closeTrade(t, newSl > initSl ? 'trail' : 'sl');
     } else {
       if (px <= t.tp) await closeTrade(t, 'tp');
-      else if (px >= t.sl) await closeTrade(t, 'sl');
+      else if (px >= t.sl) await closeTrade(t, newSl < initSl ? 'trail' : 'sl');
     }
   }
 }
@@ -270,6 +293,7 @@ function restartLoop() {
 export async function reloadTrades() {
   openTrades = await getOpenBotTrades();
   cooldownUntil.clear();
+  peak.clear();
   await broadcast();
 }
 

@@ -1,6 +1,6 @@
 import { SYMBOLS, SIGNAL_WARMUP, HTF_MAP } from './config.js';
 import { fetchHistory } from './market.js';
-import { computeSignal } from './strategy.js';
+import { computeSignal, manageStop } from './strategy.js';
 import { ema } from './indicators.js';
 
 // Per-trading-bar higher-timeframe bias (+1/-1/0), aligned WITHOUT look-ahead:
@@ -36,20 +36,27 @@ export function simulate(candles, cfg, htfBias = null) {
   for (let i = SIGNAL_WARMUP; i < candles.length; i++) {
     if (pos) {
       const bar = candles[i];
+      // Exit is checked against the stop set BEFORE this bar (no look-ahead). If a
+      // bar spans both stop and target, assume the stop hit first (conservative).
       let exit = null;
       let reason = null;
+      const trailed = pos.side === 'long' ? pos.sl > pos.initSl : pos.sl < pos.initSl;
       if (pos.side === 'long') {
-        if (bar.low <= pos.sl) (exit = pos.sl), (reason = 'sl');
+        if (bar.low <= pos.sl) (exit = pos.sl), (reason = trailed ? 'trail' : 'sl');
         else if (bar.high >= pos.tp) (exit = pos.tp), (reason = 'tp');
       } else {
-        if (bar.high >= pos.sl) (exit = pos.sl), (reason = 'sl');
+        if (bar.high >= pos.sl) (exit = pos.sl), (reason = trailed ? 'trail' : 'sl');
         else if (bar.low <= pos.tp) (exit = pos.tp), (reason = 'tp');
       }
       if (exit != null) {
-        const risk = Math.abs(pos.entry - pos.sl) || 1;
-        const r = ((pos.side === 'long' ? exit - pos.entry : pos.entry - exit) / risk);
+        const risk = Math.abs(pos.entry - pos.initSl) || 1;
+        const r = (pos.side === 'long' ? exit - pos.entry : pos.entry - exit) / risk;
         trades.push({ side: pos.side, entry: pos.entry, exit, reason, r, bars: i - pos.entryIdx });
         pos = null;
+      } else {
+        // Survived the bar: extend the best price and ratchet the stop for next bar.
+        pos.best = pos.side === 'long' ? Math.max(pos.best, bar.high) : Math.min(pos.best, bar.low);
+        pos.sl = manageStop(pos.side, pos.entry, pos.sl, pos.initSl, pos.best, cfg);
       }
     }
     if (!pos) {
@@ -57,7 +64,9 @@ export function simulate(candles, cfg, htfBias = null) {
       if (sig && sig.confidence >= cfg.confidenceMin && (sig.adx ?? 0) >= (cfg.adxMin ?? 0)) {
         const biasOk =
           !cfg.mtfConfirm || !htfBias || (sig.side === 'long' ? htfBias[i] > 0 : htfBias[i] < 0);
-        if (biasOk) pos = { side: sig.side, entry: sig.price, tp: sig.tp, sl: sig.sl, entryIdx: i };
+        if (biasOk) {
+          pos = { side: sig.side, entry: sig.price, tp: sig.tp, sl: sig.sl, initSl: sig.sl, best: sig.price, entryIdx: i };
+        }
       }
     }
   }
