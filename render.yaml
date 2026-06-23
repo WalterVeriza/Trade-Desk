@@ -1,0 +1,17 @@
+# Render blueprint for the Trader Desk backend (Express + WebSocket + Binance feed).
+# Render supports long-running Node processes and WebSockets, unlike Vercel.
+# Deploy: New > Blueprint > point at this repo. Then set DATABASE_URL & CORS_ORIGIN.
+services:
+  - type: web
+    name: trade-desk-api
+    runtime: node
+    rootDir: backend
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATABASE_URL
+        sync: false # set your Neon connection string in the Render dashboard
+      - key: CORS_ORIGIN
+        sync: false # set to your Vercel URL, e.g. https://trade-desk.vercel.app

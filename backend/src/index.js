@@ -20,7 +20,9 @@ import { placeOrder, cancelOrder, resetDesk } from './engine.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
-app.use(cors());
+// Allow the Vercel frontend (set CORS_ORIGIN to its URL in production).
+// Defaults to reflecting the request origin so local dev works out of the box.
+app.use(cors({ origin: process.env.CORS_ORIGIN || true }));
 app.use(express.json());
 
 // ----------------------------- REST API -----------------------------

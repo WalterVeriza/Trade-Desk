@@ -9,6 +9,19 @@ import Blotter from './components/Blotter.jsx';
 
 const MAX_SPARK = 60;
 
+// Resolve the WebSocket endpoint. In production VITE_API_URL points at the
+// backend (different origin than the Vercel-hosted UI); in dev it is same-origin.
+function wsUrl() {
+  const apiBase = import.meta.env.VITE_API_URL;
+  if (apiBase) {
+    const u = new URL(apiBase);
+    const proto = u.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${proto}//${u.host}/ws`;
+  }
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  return `${proto}://${location.host}/ws`;
+}
+
 export default function App() {
   const [symbols, setSymbols] = useState([]);
   const [market, setMarket] = useState({}); // symbol -> snapshot
@@ -74,8 +87,7 @@ export default function App() {
     let reconnectTimer = null;
 
     function connect() {
-      const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-      const ws = new WebSocket(`${proto}://${location.host}/ws`);
+      const ws = new WebSocket(wsUrl());
       wsRef.current = ws;
       ws.onopen = () => setStatus('live');
       ws.onmessage = (ev) => {

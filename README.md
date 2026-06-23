@@ -66,6 +66,35 @@ cd ../backend && npm start        # serves the API, the WebSocket, AND the built
 ```
 Then open http://localhost:4000.
 
+## Deployment (Vercel + Render)
+
+The backend needs a long-running Node process (background polling loop + a
+persistent WebSocket server), which **Vercel's serverless model does not
+support**. So the frontend goes on Vercel and the backend on a host that runs
+Node continuously (Render shown here; Railway / Fly.io work the same way).
+
+### 1. Backend → Render
+
+1. Push this repo to GitHub (done).
+2. Render → **New → Blueprint**, select this repo. It reads [`render.yaml`](render.yaml).
+   (Or **New → Web Service**, Root Directory `backend`, build `npm install`,
+   start `npm start`.)
+3. Set environment variables:
+   - `DATABASE_URL` → your Neon connection string.
+   - `CORS_ORIGIN` → your Vercel URL (e.g. `https://trade-desk.vercel.app`).
+4. Deploy. Note the service URL, e.g. `https://trade-desk-api.onrender.com`.
+
+### 2. Frontend → Vercel
+
+1. Vercel → **Add New → Project**, import this repo.
+2. Set **Root Directory** to `frontend` (Vercel auto-detects Vite + [`vercel.json`](frontend/vercel.json)).
+3. Add environment variable `VITE_API_URL` = your Render backend URL
+   (e.g. `https://trade-desk-api.onrender.com`).
+4. Deploy. The UI will call the backend's REST API and connect to its WebSocket.
+
+> After the first deploy, update the backend's `CORS_ORIGIN` to the final Vercel
+> domain and redeploy the backend.
+
 ## REST API
 
 | Method | Route                       | Description                              |

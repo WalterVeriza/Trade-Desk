@@ -1,4 +1,7 @@
-const base = '';
+// Backend origin. Empty in dev (Vite proxies /api). Set VITE_API_URL in
+// production (e.g. https://trade-desk-api.onrender.com) so the static Vercel
+// frontend can reach the backend hosted elsewhere.
+const base = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
 
 async function req(method, url, body) {
   const res = await fetch(base + url, {
