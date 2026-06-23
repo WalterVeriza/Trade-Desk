@@ -6,8 +6,9 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 
-import { PORT, SYMBOLS, STARTING_CASH } from './config.js';
-import { initDb, getAccount, getPositions, getOrders, closeAllOpenBotTrades } from './db.js';
+import { PORT, SYMBOLS, STARTING_CASH, BACKTEST_BARS, BACKTEST_MAX_BARS, SIGNAL_WARMUP } from './config.js';
+import { initDb, getAccount, getPositions, getOrders, closeAllOpenBotTrades, getBotState } from './db.js';
+import { backtestSymbol, backtestAll } from './backtest.js';
 import {
   startMarketFeed,
   setBroadcast,
@@ -158,6 +159,30 @@ app.post('/api/bot/toggle', async (req, res, next) => {
 app.post('/api/bot/config', async (req, res, next) => {
   try {
     res.json(await botUpdateConfig(req.body || {}));
+  } catch (e) {
+    next(e);
+  }
+});
+
+// Backtest the current strategy over recent candle history. Returns P&L in R
+// (stop-distance multiples). Optional query: symbol, interval, bars, and config
+// overrides (confidenceMin, adxMin, atrSl, atrTp) to A/B-test parameters.
+app.get('/api/bot/backtest', async (req, res, next) => {
+  try {
+    const { config } = await getBotState();
+    const interval = req.query.interval || config.timeframe;
+    const bars = Math.min(
+      Math.max(Number(req.query.bars) || BACKTEST_BARS, SIGNAL_WARMUP + 50),
+      BACKTEST_MAX_BARS
+    );
+    const cfg = { ...config };
+    for (const k of ['confidenceMin', 'adxMin', 'atrSl', 'atrTp']) {
+      if (req.query[k] != null && Number.isFinite(Number(req.query[k]))) cfg[k] = Number(req.query[k]);
+    }
+    const result = req.query.symbol
+      ? await backtestSymbol(req.query.symbol, interval, bars, cfg)
+      : await backtestAll(interval, bars, cfg);
+    res.json(result);
   } catch (e) {
     next(e);
   }

@@ -77,6 +77,65 @@ export function atr(highs, lows, closes, period = 14) {
   return out;
 }
 
+// Wilder's ADX — trend *strength* (direction-agnostic). ~25+ = trending,
+// below ~20 = ranging/chop. Used as a regime filter so the bot can stand aside
+// when there is no real trend to ride. Returns an array; read the last value.
+export function adx(highs, lows, closes, period = 14) {
+  const n = closes.length;
+  const out = new Array(n).fill(null);
+  if (n <= period + 1) return out;
+
+  const tr = new Array(n).fill(0);
+  const plusDM = new Array(n).fill(0);
+  const minusDM = new Array(n).fill(0);
+  for (let i = 1; i < n; i++) {
+    const up = highs[i] - highs[i - 1];
+    const down = lows[i - 1] - lows[i];
+    plusDM[i] = up > down && up > 0 ? up : 0;
+    minusDM[i] = down > up && down > 0 ? down : 0;
+    tr[i] = Math.max(
+      highs[i] - lows[i],
+      Math.abs(highs[i] - closes[i - 1]),
+      Math.abs(lows[i] - closes[i - 1])
+    );
+  }
+
+  // Wilder-smoothed TR / +DM / -DM, then DX per bar.
+  let trN = 0;
+  let pN = 0;
+  let mN = 0;
+  for (let i = 1; i <= period; i++) {
+    trN += tr[i];
+    pN += plusDM[i];
+    mN += minusDM[i];
+  }
+  const dxAt = () => {
+    const pDI = trN === 0 ? 0 : (100 * pN) / trN;
+    const mDI = trN === 0 ? 0 : (100 * mN) / trN;
+    const denom = pDI + mDI;
+    return denom === 0 ? 0 : (100 * Math.abs(pDI - mDI)) / denom;
+  };
+  const dx = [dxAt()];
+  for (let i = period + 1; i < n; i++) {
+    trN = trN - trN / period + tr[i];
+    pN = pN - pN / period + plusDM[i];
+    mN = mN - mN / period + minusDM[i];
+    dx.push(dxAt());
+  }
+
+  // ADX = Wilder average of DX. Align the series to the end of `out` so the
+  // last value is the current reading (exact bar alignment isn't needed here).
+  if (dx.length < period) return out;
+  let a = dx.slice(0, period).reduce((x, y) => x + y, 0) / period;
+  const series = [a];
+  for (let i = period; i < dx.length; i++) {
+    a = (a * (period - 1) + dx[i]) / period;
+    series.push(a);
+  }
+  for (let i = 0; i < series.length; i++) out[n - series.length + i] = series[i];
+  return out;
+}
+
 // Last / nth-from-last non-null helpers.
 export function last(arr) {
   for (let i = arr.length - 1; i >= 0; i--) if (arr[i] != null) return arr[i];

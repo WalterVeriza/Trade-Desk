@@ -1,4 +1,4 @@
-import { ema, rsi, macd, atr, last, prev } from './indicators.js';
+import { ema, rsi, macd, atr, adx, last, prev } from './indicators.js';
 
 // Analyse candles (oldest -> newest) and return a confluence signal with
 // ATR-based take-profit / stop-loss. Returns null if not enough history.
@@ -16,6 +16,7 @@ export function computeSignal(candles, cfg) {
   const hist = last(m.hist);
   const histPrev = prev(m.hist);
   const a = last(atr(highs, lows, closes, 14));
+  const ax = last(adx(highs, lows, closes, 14));
   const price = closes[closes.length - 1];
   if ([e20, e50, e200, r, hist, a].some((v) => v == null)) return null;
 
@@ -44,6 +45,14 @@ export function computeSignal(candles, cfg) {
   const confidence = Math.round(side === 'long' ? longScore : shortScore);
   const reasons = side === 'long' ? longReasons : shortReasons;
 
+  // Regime note: trend strength via ADX. The bot won't open below cfg.adxMin
+  // (see bot.scan) — surface it here so the UI explains why a high-confidence
+  // signal may still be skipped in a flat market.
+  const adxMin = cfg.adxMin ?? 20;
+  if (ax != null) {
+    reasons.push(ax >= adxMin ? `Tendance forte (ADX ${ax.toFixed(0)})` : `Tendance faible (ADX ${ax.toFixed(0)}) — range`);
+  }
+
   // Floor the stop distance so low-volatility pairs don't get a stop inside the
   // spread (which would trigger instantly). Preserve the configured R:R.
   const minStop = price * (cfg.minStopPct ?? 0.004);
@@ -59,6 +68,7 @@ export function computeSignal(candles, cfg) {
     tp,
     sl,
     atr: a,
+    adx: ax,
     rsi: r,
     ema20: e20,
     ema50: e50,

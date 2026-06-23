@@ -109,6 +109,23 @@ Node continuously (Render shown here; Railway / Fly.io work the same way).
 | POST   | `/api/orders`               | Place an order                           |
 | DELETE | `/api/orders/:id`           | Cancel an open order                     |
 | POST   | `/api/reset`                | Reset cash to $100k & flatten positions  |
+| GET    | `/api/bot/backtest`         | Backtest the strategy over recent candles |
+
+**Backtest the strategy**
+```bash
+# All symbols, current bot config:
+curl 'localhost:4000/api/bot/backtest'
+# One symbol + parameter overrides to A/B-test:
+curl 'localhost:4000/api/bot/backtest?symbol=BTCUSDT&interval=5m&bars=800&adxMin=25'
+```
+Returns P&L in **R** (multiples of the risked stop distance), so results are
+independent of position sizing: `winRate`, `expectancyR`, `totalR`,
+`profitFactor`, `maxDrawdownR`. Optional query: `symbol`, `interval`, `bars`,
+and config overrides `confidenceMin`, `adxMin`, `atrSl`, `atrTp`.
+
+> ⚠️ This is an **in-sample** backtest over a short recent window — useful for
+> comparing parameters, **not** proof of edge. It models neither fees nor
+> slippage, and assumes the stop fills first when a bar spans both TP and SL.
 
 **Place an order**
 ```bash
@@ -141,3 +158,10 @@ first boot (`backend/src/db.js`), idempotent.
 - **Bot ↔ book reconciliation.** The strategy bot never closes more than the book
   actually holds in its direction, so manually closing a position the bot is
   managing can't make its TP/SL open an opposite position.
+- **Closed-candle signals.** The bot drops the still-forming candle before
+  computing indicators, so signals don't flicker/repaint as the live bar updates.
+- **Regime filter (ADX).** Entries are skipped when ADX is below `adxMin`
+  (default 20) — no trend, no trade — to avoid getting chopped up in ranges.
+- **Backtester.** `GET /api/bot/backtest` replays `computeSignal` over candle
+  history with the same TP/SL, reporting expectancy in R — so parameters can be
+  tuned against numbers instead of guesswork.

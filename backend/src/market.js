@@ -177,6 +177,37 @@ export async function fetchKlines(symbol, interval = '1m', limit = 120) {
     }));
 }
 
+// Fetch a deep candle history (oldest -> newest) for backtesting, paging back
+// through Coinbase (max 300 candles per request) and de-duplicating by time.
+export async function fetchHistory(symbol, interval = '5m', bars = 500) {
+  if (!SYMBOL_SET.has(symbol)) throw new Error('Unknown symbol');
+  const meta = SYMBOLS.find((s) => s.symbol === symbol);
+  const g = GRANULARITY[interval] || 300;
+  const byTime = new Map();
+  let end = Date.now();
+  for (let page = 0; page < 6 && byTime.size < bars; page++) {
+    const start = end - 300 * g * 1000;
+    let raw;
+    try {
+      raw = await cbJson(
+        `/products/${meta.cbProduct}/candles?granularity=${g}` +
+          `&start=${new Date(start).toISOString()}&end=${new Date(end).toISOString()}`
+      );
+    } catch {
+      break; // stop paging on a transient error; use what we have
+    }
+    if (!raw.length) break;
+    for (const k of raw) byTime.set(k[0], k); // newest-first; dedupe by bucket time
+    const oldest = raw[raw.length - 1][0] * 1000;
+    if (oldest >= end) break; // no progress
+    end = oldest;
+  }
+  return [...byTime.values()]
+    .sort((a, b) => a[0] - b[0])
+    .slice(-bars)
+    .map((k) => ({ time: k[0] * 1000, low: k[1], high: k[2], open: k[3], close: k[4], volume: k[5] }));
+}
+
 // Seed rolling history from 1-minute candles so sparklines are populated at boot.
 async function seedHistory() {
   await Promise.all(

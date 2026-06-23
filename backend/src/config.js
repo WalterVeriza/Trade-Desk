@@ -49,6 +49,7 @@ export const DEFAULT_BOT_CONFIG = {
   riskPct: 1, // % of equity risked per trade (drives position size)
   atrSl: 1.5, // stop-loss distance = atrSl × ATR
   atrTp: 3, // take-profit distance = atrTp × ATR (R:R ≈ 1:2)
+  adxMin: 20, // regime filter: skip entries when ADX is below this (no trend)
   maxPositions: 4, // max concurrent bot trades
   minNotional: 50, // skip trades smaller than this (USD)
   minStopPct: 0.004, // floor for stop distance (0.4% of price)
@@ -60,3 +61,8 @@ export const STATS_EVERY_TICKS = 5; // refresh 24h open/high/low every Nth poll
 export const PERSIST_EVERY_TICKS = 5; // store a tick row every Nth poll
 export const TICK_RETENTION_DAYS = 7; // purge persisted ticks older than this
 export const TICK_CLEANUP_INTERVAL_MS = 6 * 60 * 60 * 1000; // purge cadence (6h)
+
+// Backtester defaults.
+export const BACKTEST_BARS = 500; // candles to replay per symbol
+export const BACKTEST_MAX_BARS = 1200; // hard cap (Coinbase paging)
+export const SIGNAL_WARMUP = 210; // bars needed before computeSignal is valid

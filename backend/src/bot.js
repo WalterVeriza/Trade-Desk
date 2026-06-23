@@ -76,6 +76,7 @@ export async function updateConfig(patch) {
   if (patch.riskPct != null) next.riskPct = num(patch.riskPct, 0.1, 20, config.riskPct);
   if (patch.atrSl != null) next.atrSl = num(patch.atrSl, 0.2, 10, config.atrSl);
   if (patch.atrTp != null) next.atrTp = num(patch.atrTp, 0.2, 20, config.atrTp);
+  if (patch.adxMin != null) next.adxMin = num(patch.adxMin, 0, 60, config.adxMin);
   if (patch.maxPositions != null) next.maxPositions = Math.round(num(patch.maxPositions, 1, 8, config.maxPositions));
   if (patch.loopSec != null) next.loopSec = Math.round(num(patch.loopSec, 5, 120, config.loopSec));
   const loopChanged = next.loopSec !== config.loopSec;
@@ -213,7 +214,9 @@ async function scan() {
     const openSymbols = new Set(openTrades.map((t) => t.symbol));
     for (const s of SYMBOLS) {
       try {
-        const candles = await fetchKlines(s.symbol, config.timeframe, 300);
+        // Drop the last, still-forming candle so indicators are computed only on
+        // closed bars — otherwise the signal flickers as the live bar updates.
+        const candles = (await fetchKlines(s.symbol, config.timeframe, 300)).slice(0, -1);
         const sig = computeSignal(candles, config);
         if (sig) {
           sig.symbol = s.symbol;
@@ -222,6 +225,7 @@ async function scan() {
           const canOpen =
             enabled &&
             sig.confidence >= config.confidenceMin &&
+            (sig.adx ?? 0) >= config.adxMin &&
             !openSymbols.has(s.symbol) &&
             openTrades.length < config.maxPositions &&
             !(cd && cd > now);
