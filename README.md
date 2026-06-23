@@ -126,3 +126,12 @@ first boot (`backend/src/db.js`), idempotent.
 - This is a **paper-trading** desk: no real funds, no exchange connectivity for order
   routing. Orders fill against the live mark price.
 - Starting balance is **100,000 USDT**, configurable in `backend/src/config.js`.
+- **Atomic fills.** The check → insert → fill sequence runs in a single Postgres
+  transaction (Neon pooled driver) with the account and position rows locked, so
+  concurrent orders can't double-spend cash or leave the books half-updated.
+- **Cash reservation.** A resting limit buy reserves cash at its limit price, so
+  the sum of open buy commitments can never exceed the balance and a fill is
+  always funded.
+- **Short buying power.** A sell that opens or grows a short is allowed only while
+  total gross short notional stays within equity (1×, no leverage) — without this
+  a short would be unbounded.

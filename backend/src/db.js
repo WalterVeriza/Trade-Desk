@@ -1,7 +1,36 @@
-import { neon } from '@neondatabase/serverless';
+import { neon, neonConfig, Pool } from '@neondatabase/serverless';
+import ws from 'ws';
 import { DATABASE_URL, SYMBOLS, STARTING_CASH, DEFAULT_BOT_CONFIG } from './config.js';
 
+// HTTP one-shot driver for simple reads/writes (works on port 443).
 export const sql = neon(DATABASE_URL);
+
+// Pooled WebSocket driver for *interactive* transactions (BEGIN/COMMIT with
+// reads and writes interleaved). Also speaks over port 443 via Neon's proxy, so
+// it works in the same locked-down environments as the HTTP driver.
+neonConfig.webSocketConstructor = ws;
+export const pool = new Pool({ connectionString: DATABASE_URL });
+
+// Run `fn` inside a single transaction; commit on success, roll back on throw.
+// The callback receives a dedicated client — use `client.query(...)` (pg style).
+export async function withTx(fn) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await fn(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (e) {
+    try {
+      await client.query('ROLLBACK');
+    } catch {
+      /* connection may already be broken */
+    }
+    throw e;
+  } finally {
+    client.release();
+  }
+}
 
 // Create schema and seed reference / account data. Idempotent.
 export async function initDb() {
