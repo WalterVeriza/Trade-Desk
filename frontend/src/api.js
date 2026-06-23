@@ -21,4 +21,7 @@ export const api = {
   placeOrder: (order) => req('POST', '/api/orders', order),
   cancelOrder: (id) => req('DELETE', `/api/orders/${id}`),
   reset: () => req('POST', '/api/reset'),
+  getBot: () => req('GET', '/api/bot'),
+  toggleBot: (enabled) => req('POST', '/api/bot/toggle', { enabled }),
+  setBotConfig: (config) => req('POST', '/api/bot/config', config),
 };

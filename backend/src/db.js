@@ -1,5 +1,5 @@
 import { neon } from '@neondatabase/serverless';
-import { DATABASE_URL, SYMBOLS, STARTING_CASH } from './config.js';
+import { DATABASE_URL, SYMBOLS, STARTING_CASH, DEFAULT_BOT_CONFIG } from './config.js';
 
 export const sql = neon(DATABASE_URL);
 
@@ -57,6 +57,39 @@ export async function initDb() {
     )`;
   await sql`CREATE INDEX IF NOT EXISTS orders_status_idx ON orders(status, created_at DESC)`;
 
+  // Strategy bot: single-row state (enabled + config) and managed trades.
+  await sql`
+    CREATE TABLE IF NOT EXISTS bot_state (
+      id      INT PRIMARY KEY DEFAULT 1,
+      enabled BOOLEAN NOT NULL DEFAULT false,
+      config  JSONB NOT NULL,
+      updated TIMESTAMPTZ NOT NULL DEFAULT now()
+    )`;
+
+  await sql`
+    CREATE TABLE IF NOT EXISTS bot_trades (
+      id          BIGSERIAL PRIMARY KEY,
+      symbol      TEXT NOT NULL REFERENCES symbols(symbol),
+      side        TEXT NOT NULL CHECK (side IN ('long','short')),
+      qty         NUMERIC NOT NULL,
+      entry_price NUMERIC NOT NULL,
+      tp          NUMERIC NOT NULL,
+      sl          NUMERIC NOT NULL,
+      confidence  NUMERIC NOT NULL,
+      status      TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','closed')),
+      exit_price  NUMERIC,
+      exit_reason TEXT,
+      pnl         NUMERIC,
+      opened_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+      closed_at   TIMESTAMPTZ
+    )`;
+  await sql`CREATE INDEX IF NOT EXISTS bot_trades_status_idx ON bot_trades(status, opened_at DESC)`;
+
+  await sql`
+    INSERT INTO bot_state (id, enabled, config)
+    VALUES (1, false, ${JSON.stringify(DEFAULT_BOT_CONFIG)})
+    ON CONFLICT (id) DO NOTHING`;
+
   // Seed reference symbols
   for (const s of SYMBOLS) {
     await sql`
@@ -111,5 +144,110 @@ export function mapOrder(r) {
     fillPrice: r.fill_price == null ? null : Number(r.fill_price),
     createdAt: r.created_at,
     filledAt: r.filled_at,
+  };
+}
+
+// --------------------------- Strategy bot ---------------------------
+export async function getBotState() {
+  const rows = await sql`SELECT enabled, config FROM bot_state WHERE id = 1`;
+  if (!rows.length) return { enabled: false, config: { ...DEFAULT_BOT_CONFIG } };
+  return { enabled: rows[0].enabled, config: { ...DEFAULT_BOT_CONFIG, ...rows[0].config } };
+}
+
+export async function setBotEnabled(enabled) {
+  await sql`UPDATE bot_state SET enabled = ${enabled}, updated = now() WHERE id = 1`;
+}
+
+export async function setBotConfig(config) {
+  await sql`UPDATE bot_state SET config = ${JSON.stringify(config)}, updated = now() WHERE id = 1`;
+}
+
+function mapBotTrade(r) {
+  return {
+    id: Number(r.id),
+    symbol: r.symbol,
+    side: r.side,
+    qty: Number(r.qty),
+    entryPrice: Number(r.entry_price),
+    tp: Number(r.tp),
+    sl: Number(r.sl),
+    confidence: Number(r.confidence),
+    status: r.status,
+    exitPrice: r.exit_price == null ? null : Number(r.exit_price),
+    exitReason: r.exit_reason,
+    pnl: r.pnl == null ? null : Number(r.pnl),
+    openedAt: r.opened_at,
+    closedAt: r.closed_at,
+  };
+}
+
+export async function insertBotTrade(t) {
+  const rows = await sql.query(
+    `INSERT INTO bot_trades (symbol, side, qty, entry_price, tp, sl, confidence)
+     VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+    [t.symbol, t.side, t.qty, t.entryPrice, t.tp, t.sl, t.confidence]
+  );
+  return mapBotTrade(rows[0]);
+}
+
+export async function getOpenBotTrades() {
+  const rows = await sql`SELECT * FROM bot_trades WHERE status = 'open' ORDER BY opened_at DESC`;
+  return rows.map(mapBotTrade);
+}
+
+// Atomically claim an open trade for closing (race-safe). Returns the row only
+// to the caller that flipped it from open -> closed.
+export async function claimBotTrade(id) {
+  const rows = await sql.query(
+    "UPDATE bot_trades SET status='closed', closed_at=now() WHERE id=$1 AND status='open' RETURNING *",
+    [id]
+  );
+  return rows.length ? mapBotTrade(rows[0]) : null;
+}
+
+export async function finalizeBotTrade(id, exitPrice, reason, pnl) {
+  await sql.query('UPDATE bot_trades SET exit_price=$1, exit_reason=$2, pnl=$3 WHERE id=$4', [
+    exitPrice,
+    reason,
+    pnl,
+    id,
+  ]);
+}
+
+// Undo a claim if the closing order could not be placed.
+export async function revertBotTrade(id) {
+  await sql.query("UPDATE bot_trades SET status='open', closed_at=NULL WHERE id=$1", [id]);
+}
+
+export async function closeAllOpenBotTrades(reason = 'reset') {
+  await sql.query(
+    "UPDATE bot_trades SET status='closed', exit_reason=$1, closed_at=now() WHERE status='open'",
+    [reason]
+  );
+}
+
+export async function getRecentClosedBotTrades(limit = 25) {
+  const rows = await sql.query(
+    `SELECT * FROM bot_trades WHERE status='closed' ORDER BY closed_at DESC LIMIT $1`,
+    [limit]
+  );
+  return rows.map(mapBotTrade);
+}
+
+export async function getBotStats() {
+  const rows = await sql`
+    SELECT COUNT(*)::int AS trades,
+           COUNT(*) FILTER (WHERE pnl > 0)::int AS wins,
+           COALESCE(SUM(pnl), 0) AS total_pnl
+    FROM bot_trades WHERE status = 'closed'`;
+  const r = rows[0];
+  const trades = Number(r.trades);
+  const wins = Number(r.wins);
+  return {
+    trades,
+    wins,
+    losses: trades - wins,
+    winRate: trades ? (wins / trades) * 100 : 0,
+    totalPnl: Number(r.total_pnl),
   };
 }

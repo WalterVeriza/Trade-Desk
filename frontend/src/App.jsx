@@ -6,6 +6,7 @@ import PriceChart from './components/PriceChart.jsx';
 import OrderTicket from './components/OrderTicket.jsx';
 import Positions from './components/Positions.jsx';
 import Blotter from './components/Blotter.jsx';
+import StrategyBot from './components/StrategyBot.jsx';
 
 const MAX_SPARK = 60;
 
@@ -30,6 +31,15 @@ export default function App() {
   const [positions, setPositions] = useState([]);
   const [orders, setOrders] = useState([]);
   const [startingCash, setStartingCash] = useState(100000);
+  const [bot, setBot] = useState({
+    enabled: false,
+    config: {},
+    signals: {},
+    openTrades: [],
+    recentClosed: [],
+    stats: {},
+    timeframes: [],
+  });
   const [selected, setSelected] = useState('BTCUSDT');
   const [status, setStatus] = useState('connecting'); // connecting | live | offline
   const [toast, setToast] = useState(null);
@@ -70,6 +80,7 @@ export default function App() {
         setAccount(s.account);
         setPositions(s.positions);
         setOrders(s.orders);
+        if (s.bot) setBot(s.bot);
         setSparks(s.sparklines || {});
         const m = {};
         for (const snap of s.market) m[snap.symbol] = snap;
@@ -97,6 +108,8 @@ export default function App() {
           setAccount(msg.account);
           setPositions(msg.positions);
           setOrders(msg.orders);
+        } else if (msg.type === 'bot') {
+          setBot(msg.bot);
         }
       };
       ws.onclose = () => {
@@ -146,6 +159,31 @@ export default function App() {
     notify('Desk reset to starting balance', 'info');
   }, [notify]);
 
+  const handleBotToggle = useCallback(
+    async (enabled) => {
+      try {
+        await api.toggleBot(enabled);
+        notify(enabled ? 'Strategy bot started — auto-trading' : 'Strategy bot stopped', 'info');
+      } catch (e) {
+        notify(e.message, 'error');
+      }
+    },
+    [notify]
+  );
+
+  const handleBotConfig = useCallback(
+    async (patch) => {
+      // Optimistic config update for snappy sliders; ws confirms.
+      setBot((b) => ({ ...b, config: { ...b.config, ...patch } }));
+      try {
+        await api.setBotConfig(patch);
+      } catch (e) {
+        notify(e.message, 'error');
+      }
+    },
+    [notify]
+  );
+
   // Derived portfolio metrics
   const metrics = useMemo(() => {
     let positionsValue = 0;
@@ -178,6 +216,7 @@ export default function App() {
             symbols={symbols}
             market={market}
             sparks={sparks}
+            signals={bot.signals}
             selected={selected}
             onSelect={setSelected}
           />
@@ -195,6 +234,7 @@ export default function App() {
             onPlace={handlePlace}
             notify={notify}
           />
+          <StrategyBot bot={bot} market={market} onToggle={handleBotToggle} onConfig={handleBotConfig} />
           <Positions positions={positions} market={market} onSelect={setSelected} />
         </section>
       </div>

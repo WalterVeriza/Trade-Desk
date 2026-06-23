@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 
 import { PORT, SYMBOLS, STARTING_CASH } from './config.js';
-import { initDb, getAccount, getPositions, getOrders } from './db.js';
+import { initDb, getAccount, getPositions, getOrders, closeAllOpenBotTrades } from './db.js';
 import {
   startMarketFeed,
   setBroadcast,
@@ -17,6 +17,15 @@ import {
   fetchKlines,
 } from './market.js';
 import { placeOrder, cancelOrder, resetDesk } from './engine.js';
+import {
+  startBot,
+  setBotHooks,
+  getBotSnapshot,
+  onTick as botOnTick,
+  toggle as botToggle,
+  updateConfig as botUpdateConfig,
+  reloadTrades as botReloadTrades,
+} from './bot.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -54,6 +63,7 @@ app.get('/api/state', async (req, res, next) => {
       positions,
       orders,
       startingCash: STARTING_CASH,
+      bot: await getBotSnapshot(),
     });
   } catch (e) {
     next(e);
@@ -119,8 +129,35 @@ app.delete('/api/orders/:id', async (req, res, next) => {
 app.post('/api/reset', async (req, res, next) => {
   try {
     await resetDesk(STARTING_CASH);
+    await closeAllOpenBotTrades('reset');
+    await botReloadTrades();
     await pushState();
     res.json({ ok: true });
+  } catch (e) {
+    next(e);
+  }
+});
+
+// ----------------------------- Strategy bot -----------------------------
+app.get('/api/bot', async (req, res, next) => {
+  try {
+    res.json(await getBotSnapshot());
+  } catch (e) {
+    next(e);
+  }
+});
+
+app.post('/api/bot/toggle', async (req, res, next) => {
+  try {
+    res.json(await botToggle(req.body?.enabled));
+  } catch (e) {
+    next(e);
+  }
+});
+
+app.post('/api/bot/config', async (req, res, next) => {
+  try {
+    res.json(await botUpdateConfig(req.body || {}));
   } catch (e) {
     next(e);
   }
@@ -175,9 +212,16 @@ wss.on('connection', (ws) => {
   ws.send(JSON.stringify({ type: 'tick', market: getMarket() }));
 });
 
-// Market feed -> broadcast live ticks; refresh state when fills happen.
+// Bot hooks: push portfolio refreshes and bot snapshots to all clients.
+setBotHooks({
+  onState: pushState,
+  onBot: (bot) => broadcast({ type: 'bot', bot }),
+});
+
+// Market feed -> broadcast live ticks; enforce bot TP/SL; refresh on fills.
 setBroadcast(({ market, fills }) => {
   broadcast({ type: 'tick', market });
+  botOnTick().catch((e) => console.error('[ws] bot tick error:', e.message));
   if (fills && fills.length) pushState();
 });
 
@@ -188,6 +232,7 @@ setBroadcast(({ market, fills }) => {
     await initDb();
     console.log('[boot] database ready');
     await startMarketFeed();
+    await startBot();
     server.listen(PORT, () => {
       console.log(`[boot] Trader Desk backend listening on http://localhost:${PORT}`);
       console.log(`[boot] WebSocket on ws://localhost:${PORT}/ws`);

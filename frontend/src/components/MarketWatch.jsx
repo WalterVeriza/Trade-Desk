@@ -2,7 +2,7 @@ import { memo } from 'react';
 import Sparkline from './Sparkline.jsx';
 import { fmtPrice, fmtPct, fmtCompact, signClass } from '../format.js';
 
-function Row({ meta, snap, spark, selected, onSelect }) {
+function Row({ meta, snap, spark, signal, selected, onSelect }) {
   const up = (snap?.changePct ?? 0) >= 0;
   return (
     <button
@@ -12,6 +12,11 @@ function Row({ meta, snap, spark, selected, onSelect }) {
       <div className="watch-id">
         <span className="watch-base">{meta.base}</span>
         <span className="watch-name">{meta.name}</span>
+        {signal && (
+          <span className={`sig-pill ${signal.side}`} title={`Signal ${signal.side} · confiance ${signal.confidence}%`}>
+            {signal.side === 'long' ? '▲' : '▼'} {signal.confidence}%
+          </span>
+        )}
       </div>
       <Sparkline data={spark} up={up} />
       <div className="watch-nums">
@@ -25,7 +30,7 @@ function Row({ meta, snap, spark, selected, onSelect }) {
   );
 }
 
-function MarketWatch({ symbols, market, sparks, selected, onSelect }) {
+function MarketWatch({ symbols, market, sparks, signals = {}, selected, onSelect }) {
   return (
     <div className="panel">
       <div className="panel-head">
@@ -39,6 +44,7 @@ function MarketWatch({ symbols, market, sparks, selected, onSelect }) {
             meta={meta}
             snap={market[meta.symbol]}
             spark={sparks[meta.symbol]}
+            signal={signals[meta.symbol]}
             selected={selected === meta.symbol}
             onSelect={onSelect}
           />

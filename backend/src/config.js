@@ -40,6 +40,21 @@ export const SYMBOLS = [
 
 export const SYMBOL_SET = new Set(SYMBOLS.map((s) => s.symbol));
 export const STARTING_CASH = 100000; // USD paper-trading balance
+
+// Strategy bot defaults. Multi-indicator confluence + ATR-based TP/SL.
+export const DEFAULT_BOT_CONFIG = {
+  timeframe: '5m', // candle timeframe for indicators
+  loopSec: 20, // how often the signal scan runs
+  confidenceMin: 65, // only trade signals at/above this confidence (0-100)
+  riskPct: 1, // % of equity risked per trade (drives position size)
+  atrSl: 1.5, // stop-loss distance = atrSl × ATR
+  atrTp: 3, // take-profit distance = atrTp × ATR (R:R ≈ 1:2)
+  maxPositions: 4, // max concurrent bot trades
+  minNotional: 50, // skip trades smaller than this (USD)
+  minStopPct: 0.004, // floor for stop distance (0.4% of price)
+  cooldownSec: 90, // wait after closing a symbol before re-entering
+};
+export const BOT_TIMEFRAMES = ['1m', '5m', '15m', '1h'];
 export const POLL_INTERVAL_MS = 3000; // Coinbase polling cadence
 export const STATS_EVERY_TICKS = 5; // refresh 24h open/high/low every Nth poll
 export const PERSIST_EVERY_TICKS = 5; // store a tick row every Nth poll
