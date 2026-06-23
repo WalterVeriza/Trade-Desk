@@ -1,4 +1,4 @@
-import { SYMBOLS, DEFAULT_BOT_CONFIG, BOT_TIMEFRAMES } from './config.js';
+import { SYMBOLS, DEFAULT_BOT_CONFIG, BOT_TIMEFRAMES, HTF_MAP } from './config.js';
 import {
   getBotState,
   setBotEnabled,
@@ -16,7 +16,7 @@ import {
 } from './db.js';
 import { fetchKlines, getPrice, getPriceMap } from './market.js';
 import { placeOrder } from './engine.js';
-import { computeSignal } from './strategy.js';
+import { computeSignal, htfTrend } from './strategy.js';
 
 let enabled = false;
 let config = { ...DEFAULT_BOT_CONFIG };
@@ -77,6 +77,7 @@ export async function updateConfig(patch) {
   if (patch.atrSl != null) next.atrSl = num(patch.atrSl, 0.2, 10, config.atrSl);
   if (patch.atrTp != null) next.atrTp = num(patch.atrTp, 0.2, 20, config.atrTp);
   if (patch.adxMin != null) next.adxMin = num(patch.adxMin, 0, 60, config.adxMin);
+  if (patch.mtfConfirm != null) next.mtfConfirm = !!patch.mtfConfirm;
   if (patch.maxPositions != null) next.maxPositions = Math.round(num(patch.maxPositions, 1, 8, config.maxPositions));
   if (patch.loopSec != null) next.loopSec = Math.round(num(patch.loopSec, 5, 120, config.loopSec));
   const loopChanged = next.loopSec !== config.loopSec;
@@ -220,12 +221,28 @@ async function scan() {
         const sig = computeSignal(candles, config);
         if (sig) {
           sig.symbol = s.symbol;
+          // Multi-timeframe confirmation: only trade with the higher-TF trend.
+          let htfBias = 0;
+          if (config.mtfConfirm && HTF_MAP[config.timeframe]) {
+            try {
+              const htf = (await fetchKlines(s.symbol, HTF_MAP[config.timeframe], 300)).slice(0, -1);
+              htfBias = htfTrend(htf);
+            } catch {
+              /* leave bias neutral on a transient HTF fetch error */
+            }
+          }
+          sig.htfBias = htfBias;
+          const mtfOk = !config.mtfConfirm || (sig.side === 'long' ? htfBias > 0 : htfBias < 0);
+          if (config.mtfConfirm) {
+            sig.reasons.push(mtfOk ? `Tendance ${HTF_MAP[config.timeframe]} alignée` : `Contre la tendance ${HTF_MAP[config.timeframe]}`);
+          }
           signals.set(s.symbol, sig);
           const cd = cooldownUntil.get(s.symbol);
           const canOpen =
             enabled &&
             sig.confidence >= config.confidenceMin &&
             (sig.adx ?? 0) >= config.adxMin &&
+            mtfOk &&
             !openSymbols.has(s.symbol) &&
             openTrades.length < config.maxPositions &&
             !(cd && cd > now);

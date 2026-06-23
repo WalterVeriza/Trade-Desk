@@ -50,12 +50,17 @@ export const DEFAULT_BOT_CONFIG = {
   atrSl: 1.5, // stop-loss distance = atrSl × ATR
   atrTp: 3, // take-profit distance = atrTp × ATR (R:R ≈ 1:2)
   adxMin: 20, // regime filter: skip entries when ADX is below this (no trend)
+  mtfConfirm: false, // higher-TF trend filter (toggle). Off by default: the
+  // backtest showed it cuts ~20% of trades without raising per-trade edge,
+  // only lowering drawdown — so leave it opt-in rather than on by default.
   maxPositions: 4, // max concurrent bot trades
   minNotional: 50, // skip trades smaller than this (USD)
   minStopPct: 0.004, // floor for stop distance (0.4% of price)
   cooldownSec: 90, // wait after closing a symbol before re-entering
 };
 export const BOT_TIMEFRAMES = ['1m', '5m', '15m', '1h'];
+// Higher timeframe used to confirm each trading timeframe's trend (MTF filter).
+export const HTF_MAP = { '1m': '15m', '5m': '1h', '15m': '6h', '1h': '1d' };
 export const POLL_INTERVAL_MS = 3000; // Coinbase polling cadence
 export const STATS_EVERY_TICKS = 5; // refresh 24h open/high/low every Nth poll
 export const PERSIST_EVERY_TICKS = 5; // store a tick row every Nth poll

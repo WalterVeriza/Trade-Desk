@@ -121,7 +121,7 @@ curl 'localhost:4000/api/bot/backtest?symbol=BTCUSDT&interval=5m&bars=800&adxMin
 Returns P&L in **R** (multiples of the risked stop distance), so results are
 independent of position sizing: `winRate`, `expectancyR`, `totalR`,
 `profitFactor`, `maxDrawdownR`. Optional query: `symbol`, `interval`, `bars`,
-and config overrides `confidenceMin`, `adxMin`, `atrSl`, `atrTp`.
+and config overrides `confidenceMin`, `adxMin`, `atrSl`, `atrTp`, `mtfConfirm`.
 
 > ⚠️ This is an **in-sample** backtest over a short recent window — useful for
 > comparing parameters, **not** proof of edge. It models neither fees nor
@@ -165,3 +165,9 @@ first boot (`backend/src/db.js`), idempotent.
 - **Backtester.** `GET /api/bot/backtest` replays `computeSignal` over candle
   history with the same TP/SL, reporting expectancy in R — so parameters can be
   tuned against numbers instead of guesswork.
+- **Multi-timeframe filter (`mtfConfirm`, opt-in).** Only trades aligned with the
+  higher-timeframe trend (EMA200 on 1h for a 5m strategy, etc.). It's **off by
+  default**: backtesting showed it cuts ~20% of trades without improving
+  per-trade expectancy, only lowering drawdown — a textbook example of validating
+  an idea before shipping it. Toggle it on and re-run the backtest for your
+  window/regime to decide.

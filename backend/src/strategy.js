@@ -1,5 +1,17 @@
 import { ema, rsi, macd, atr, adx, last, prev } from './indicators.js';
 
+// Higher-timeframe trend bias from a candle series (oldest -> newest):
+// +1 bullish / -1 bearish / 0 unknown, based on price vs EMA200. Used by the
+// MTF filter so the bot only takes trades aligned with the bigger trend.
+export function htfTrend(candles) {
+  if (!candles || candles.length < 200) return 0;
+  const closes = candles.map((c) => c.close);
+  const e200 = last(ema(closes, 200));
+  if (e200 == null) return 0;
+  const price = closes[closes.length - 1];
+  return price > e200 ? 1 : price < e200 ? -1 : 0;
+}
+
 // Analyse candles (oldest -> newest) and return a confluence signal with
 // ATR-based take-profit / stop-loss. Returns null if not enough history.
 export function computeSignal(candles, cfg) {

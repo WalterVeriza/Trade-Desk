@@ -179,6 +179,7 @@ app.get('/api/bot/backtest', async (req, res, next) => {
     for (const k of ['confidenceMin', 'adxMin', 'atrSl', 'atrTp']) {
       if (req.query[k] != null && Number.isFinite(Number(req.query[k]))) cfg[k] = Number(req.query[k]);
     }
+    if (req.query.mtfConfirm != null) cfg.mtfConfirm = !['0', 'false', 'no'].includes(String(req.query.mtfConfirm).toLowerCase());
     const result = req.query.symbol
       ? await backtestSymbol(req.query.symbol, interval, bars, cfg)
       : await backtestAll(interval, bars, cfg);
