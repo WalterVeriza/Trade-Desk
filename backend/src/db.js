@@ -113,6 +113,10 @@ export async function initDb() {
       closed_at   TIMESTAMPTZ
     )`;
   await sql`CREATE INDEX IF NOT EXISTS bot_trades_status_idx ON bot_trades(status, opened_at DESC)`;
+  // At most ONE open trade per symbol — enforced by the DB so a stale in-memory
+  // mirror or two overlapping instances can't stack a long and a short on the
+  // same symbol (they would net out in the book and waste the spread).
+  await sql`CREATE UNIQUE INDEX IF NOT EXISTS bot_trades_one_open ON bot_trades(symbol) WHERE status = 'open'`;
   // The original stop, kept immutable so break-even/trailing can size risk in R
   // even after `sl` has been ratcheted. Added separately for existing tables.
   await sql`ALTER TABLE bot_trades ADD COLUMN IF NOT EXISTS init_sl NUMERIC`;
@@ -231,6 +235,17 @@ export async function insertBotTrade(t) {
 // Persist a ratcheted stop (break-even / trailing) for an open trade.
 export async function updateBotTradeStop(id, sl) {
   await sql.query("UPDATE bot_trades SET sl = $1 WHERE id = $2 AND status = 'open'", [sl, id]);
+}
+
+// Set the real entry/TP/SL once the entry order has filled (the row was inserted
+// first, with provisional prices, to atomically claim the per-symbol slot).
+export async function updateBotTradeFill(id, entryPrice, tp, sl) {
+  await sql.query('UPDATE bot_trades SET entry_price=$1, tp=$2, sl=$3 WHERE id=$4', [entryPrice, tp, sl, id]);
+}
+
+// Remove a just-claimed slot when the entry order could not be placed.
+export async function deleteBotTrade(id) {
+  await sql.query('DELETE FROM bot_trades WHERE id=$1', [id]);
 }
 
 export async function getOpenBotTrades() {

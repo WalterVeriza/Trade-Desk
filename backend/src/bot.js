@@ -4,6 +4,8 @@ import {
   setBotEnabled,
   setBotConfig,
   insertBotTrade,
+  updateBotTradeFill,
+  deleteBotTrade,
   getOpenBotTrades,
   claimBotTrade,
   finalizeBotTrade,
@@ -128,17 +130,42 @@ async function openTrade(signal) {
   try {
     const qty = await sizeTrade(signal);
     if (!qty) return;
-    const orderSide = signal.side === 'long' ? 'buy' : 'sell';
-    const { order } = await placeOrder({ symbol, side: orderSide, type: 'market', qty }, getPrice);
-    const entry = order.fillPrice;
-    // Recompute TP/SL from the actual fill, preserving the ATR distances.
-    const slDist = Math.abs(signal.price - signal.sl);
-    const tpDist = Math.abs(signal.tp - signal.price);
-    const sl = signal.side === 'long' ? entry - slDist : entry + slDist;
-    const tp = signal.side === 'long' ? entry + tpDist : entry - tpDist;
-    await insertBotTrade({ symbol, side: signal.side, qty, entryPrice: entry, tp, sl, confidence: signal.confidence });
+
+    // Claim the per-symbol slot FIRST (provisional prices). The partial unique
+    // index makes this atomic: if a trade on this symbol is already open — stale
+    // mirror or a second instance — the insert throws and we skip without ever
+    // placing an order, so we can't stack an opposite position on the symbol.
+    let claim;
+    try {
+      claim = await insertBotTrade({
+        symbol,
+        side: signal.side,
+        qty,
+        entryPrice: signal.price,
+        tp: signal.tp,
+        sl: signal.sl,
+        confidence: signal.confidence,
+      });
+    } catch {
+      return; // symbol already has an open trade
+    }
+
+    try {
+      const orderSide = signal.side === 'long' ? 'buy' : 'sell';
+      const { order } = await placeOrder({ symbol, side: orderSide, type: 'market', qty }, getPrice);
+      const entry = order.fillPrice;
+      // Recompute TP/SL from the actual fill, preserving the ATR distances.
+      const slDist = Math.abs(signal.price - signal.sl);
+      const tpDist = Math.abs(signal.tp - signal.price);
+      const sl = signal.side === 'long' ? entry - slDist : entry + slDist;
+      const tp = signal.side === 'long' ? entry + tpDist : entry - tpDist;
+      await updateBotTradeFill(claim.id, entry, tp, sl);
+      console.log(`[bot] OPEN ${signal.side} ${qty} ${symbol} @ ${entry} (conf ${signal.confidence}%)`);
+    } catch (e) {
+      await deleteBotTrade(claim.id); // release the slot; no position was opened
+      throw e;
+    }
     openTrades = await getOpenBotTrades();
-    console.log(`[bot] OPEN ${signal.side} ${qty} ${symbol} @ ${entry} (conf ${signal.confidence}%)`);
     if (onState) await onState();
     await broadcast();
   } catch (e) {
