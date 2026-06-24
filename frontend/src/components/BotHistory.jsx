@@ -75,6 +75,11 @@ export default function BotHistory({ stats = {}, onClose }) {
         </button>
         <h1>Historique du bot</h1>
         <span className="history-count">{total} trade{total > 1 ? 's' : ''}</span>
+        {stats.trades ? (
+          <span className={`history-state ${stats.winRate >= 50 ? 'ok' : 'ko'}`} title="Trades gagnants sur le total">
+            ✓ {stats.wins ?? 0}/{stats.trades} OK
+          </span>
+        ) : null}
       </div>
 
       <div className="history-summary">

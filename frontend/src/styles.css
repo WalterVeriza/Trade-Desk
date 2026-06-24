@@ -1010,6 +1010,22 @@ body {
   font-family: var(--mono);
   font-size: 12px;
 }
+.history-state {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  padding: 3px 9px;
+  border-radius: 7px;
+}
+.history-state.ok {
+  background: var(--up-soft);
+  color: var(--up);
+}
+.history-state.ko {
+  background: var(--down-soft);
+  color: var(--down);
+}
 .back-btn {
   font-weight: 600;
 }
