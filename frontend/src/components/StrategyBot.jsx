@@ -1,6 +1,15 @@
 import { useState } from 'react';
 import { fmtPrice, fmtUsd, fmtPct, signClass } from '../format.js';
 
+function whenLabel(ts) {
+  const mins = Math.round((ts - Date.now()) / 60000);
+  const when = new Date(ts).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  if (mins < 0) return when;
+  if (mins < 60) return `dans ${mins} min`;
+  if (mins < 1440) return `dans ${Math.round(mins / 60)} h`;
+  return when;
+}
+
 function TradeCard({ trade, price }) {
   const px = price ?? trade.entryPrice;
   const pnl =
@@ -75,6 +84,19 @@ export default function StrategyBot({ bot, market, onToggle, onConfig }) {
           <b className={`mono ${signClass(stats.totalPnl)}`}>{fmtUsd(stats.totalPnl || 0)}</b>
         </div>
       </div>
+
+      {bot.events && bot.events.blackout && (
+        <div className="ev-bar ev-blackout">
+          ⏸ Pause — <b>{bot.events.blackout.title}</b> ({whenLabel(bot.events.blackout.time)}) · nouvelles
+          entrées suspendues
+        </div>
+      )}
+      {bot.events && !bot.events.blackout && bot.events.next && (
+        <div className="ev-bar">
+          🗓 Prochain événement : <b>{bot.events.next.title}</b> · {whenLabel(bot.events.next.time)}
+          {!bot.events.cryptoEnabled && <span className="ev-note"> · crypto off</span>}
+        </div>
+      )}
 
       <button className="bot-config-toggle" onClick={() => setOpen((o) => !o)}>
         {open ? '▾' : '▸'} Strategy settings · {cfg.timeframe} · conf ≥{cfg.confidenceMin}% · risk{' '}

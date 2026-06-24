@@ -20,6 +20,7 @@ import {
 import { fetchKlines, getPrice, getPriceMap } from './market.js';
 import { placeOrder } from './engine.js';
 import { computeSignal, htfTrend, manageStop } from './strategy.js';
+import { startEvents, blackoutEvent, getEventsSnapshot } from './events.js';
 
 let enabled = false;
 let config = { ...DEFAULT_BOT_CONFIG };
@@ -49,6 +50,7 @@ export async function getBotSnapshot() {
     openTrades,
     recentClosed,
     stats,
+    events: getEventsSnapshot(config),
   };
 }
 
@@ -86,6 +88,11 @@ export async function updateConfig(patch) {
   if (patch.mtfConfirm != null) next.mtfConfirm = !!patch.mtfConfirm;
   if (patch.maxPerDirection != null) next.maxPerDirection = Math.round(num(patch.maxPerDirection, 1, 8, config.maxPerDirection));
   if (patch.confSizing != null) next.confSizing = !!patch.confSizing;
+  if (patch.eventGuard != null) next.eventGuard = !!patch.eventGuard;
+  if (patch.evBeforeMin != null) next.evBeforeMin = Math.round(num(patch.evBeforeMin, 0, 720, config.evBeforeMin));
+  if (patch.evAfterMin != null) next.evAfterMin = Math.round(num(patch.evAfterMin, 0, 720, config.evAfterMin));
+  if (patch.evMacro != null) next.evMacro = !!patch.evMacro;
+  if (patch.evCrypto != null) next.evCrypto = !!patch.evCrypto;
   if (patch.maxPositions != null) next.maxPositions = Math.round(num(patch.maxPositions, 1, 8, config.maxPositions));
   if (patch.loopSec != null) next.loopSec = Math.round(num(patch.loopSec, 5, 120, config.loopSec));
   const loopChanged = next.loopSec !== config.loopSec;
@@ -273,6 +280,9 @@ async function scan() {
   scanning = true;
   try {
     const now = Date.now();
+    // High-impact calendar event nearby? Pause ALL new entries (existing trades
+    // keep their TP/SL). Avoids getting whipsawed by announcement volatility.
+    const bo = blackoutEvent(now, config);
     const openSymbols = new Set(openTrades.map((t) => t.symbol));
     for (const s of SYMBOLS) {
       try {
@@ -305,6 +315,7 @@ async function scan() {
           const sameDir = openTrades.filter((t) => t.side === sig.side).length;
           const canOpen =
             enabled &&
+            !bo &&
             sig.confidence >= config.confidenceMin &&
             (sig.adx ?? 0) >= config.adxMin &&
             mtfOk &&
@@ -345,6 +356,7 @@ export async function startBot() {
   enabled = state.enabled;
   config = state.config;
   openTrades = await getOpenBotTrades();
+  await startEvents();
   await scan().catch((e) => console.error('[bot] first scan failed:', e.message));
   restartLoop();
   console.log(`[bot] strategy engine started (${config.timeframe}, scan ${config.loopSec}s, ${enabled ? 'ENABLED' : 'standby'})`);

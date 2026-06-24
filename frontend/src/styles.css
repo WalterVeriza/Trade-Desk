@@ -779,6 +779,27 @@ body {
   cursor: pointer;
 }
 
+.ev-bar {
+  padding: 7px 12px;
+  font-size: 10.5px;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border);
+  background: var(--panel-2);
+}
+.ev-bar b {
+  color: var(--text);
+}
+.ev-blackout {
+  color: var(--warn);
+  background: rgba(240, 169, 59, 0.1);
+}
+.ev-blackout b {
+  color: var(--warn);
+}
+.ev-note {
+  color: var(--text-faint);
+}
+
 .bot-section-label {
   font-size: 9.5px;
   text-transform: uppercase;

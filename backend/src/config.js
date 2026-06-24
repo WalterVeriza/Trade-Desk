@@ -64,6 +64,11 @@ export const DEFAULT_BOT_CONFIG = {
   minNotional: 50, // skip trades smaller than this (USD)
   minStopPct: 0.004, // floor for stop distance (0.4% of price)
   cooldownSec: 90, // wait after closing a symbol before re-entering
+  eventGuard: true, // pause NEW entries around high-impact calendar events
+  evBeforeMin: 60, // blackout window: minutes before an event
+  evAfterMin: 30, // blackout window: minutes after an event
+  evMacro: true, // use the macro calendar (FOMC / CPI / NFP)
+  evCrypto: true, // use crypto events (CoinMarketCal — needs COINMARKETCAL_KEY)
 };
 export const BOT_TIMEFRAMES = ['1m', '5m', '15m', '1h'];
 // Higher timeframe used to confirm each trading timeframe's trend (MTF filter).
