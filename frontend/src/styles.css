@@ -764,6 +764,20 @@ body {
   color: var(--text-faint);
   font-family: var(--mono);
 }
+.bot-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.bot-check input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
 
 .bot-section-label {
   font-size: 9.5px;

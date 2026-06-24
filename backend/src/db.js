@@ -286,18 +286,24 @@ export async function closeAllOpenBotTrades(reason = 'reset') {
 
 export async function getRecentClosedBotTrades(limit = 25) {
   const rows = await sql.query(
-    `SELECT * FROM bot_trades WHERE status='closed' ORDER BY closed_at DESC LIMIT $1`,
+    `SELECT * FROM bot_trades
+     WHERE status='closed' AND COALESCE(exit_reason,'') NOT IN ('dedup','reset','cleanup')
+     ORDER BY closed_at DESC LIMIT $1`,
     [limit]
   );
   return rows.map(mapBotTrade);
 }
 
 export async function getBotStats() {
+  // Only genuine strategy exits count toward win-rate/P&L. Administrative closes
+  // (dedup of a stacked pair, desk reset) are excluded so they don't skew stats.
   const rows = await sql`
     SELECT COUNT(*)::int AS trades,
            COUNT(*) FILTER (WHERE pnl > 0)::int AS wins,
            COALESCE(SUM(pnl), 0) AS total_pnl
-    FROM bot_trades WHERE status = 'closed'`;
+    FROM bot_trades
+    WHERE status = 'closed'
+      AND COALESCE(exit_reason, '') NOT IN ('dedup', 'reset', 'cleanup')`;
   const r = rows[0];
   const trades = Number(r.trades);
   const wins = Number(r.wins);

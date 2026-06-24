@@ -77,7 +77,8 @@ export default function StrategyBot({ bot, market, onToggle, onConfig }) {
       </div>
 
       <button className="bot-config-toggle" onClick={() => setOpen((o) => !o)}>
-        {open ? '▾' : '▸'} Strategy settings · {cfg.timeframe} · conf ≥{cfg.confidenceMin}% · risk {cfg.riskPct}%
+        {open ? '▾' : '▸'} Strategy settings · {cfg.timeframe} · conf ≥{cfg.confidenceMin}% · risk{' '}
+        {cfg.riskPct}% · cap {cfg.maxPerDirection}/dir
       </button>
       {open && (
         <div className="bot-config">
@@ -112,6 +113,25 @@ export default function StrategyBot({ bot, market, onToggle, onConfig }) {
               value={cfg.riskPct}
               onChange={(e) => onConfig({ riskPct: Number(e.target.value) })}
             />
+          </label>
+          <label className="field">
+            <span>Max same direction ({cfg.maxPerDirection})</span>
+            <input
+              type="range"
+              min="1"
+              max={cfg.maxPositions || 4}
+              step="1"
+              value={cfg.maxPerDirection ?? cfg.maxPositions ?? 4}
+              onChange={(e) => onConfig({ maxPerDirection: Number(e.target.value) })}
+            />
+          </label>
+          <label className="bot-check">
+            <input
+              type="checkbox"
+              checked={!!cfg.confSizing}
+              onChange={(e) => onConfig({ confSizing: e.target.checked })}
+            />
+            <span>Taille pondérée par la confiance</span>
           </label>
           <div className="bot-rr">
             R:R fixe — SL {cfg.atrSl}×ATR · TP {cfg.atrTp}×ATR (1:{(cfg.atrTp / cfg.atrSl).toFixed(0)})
