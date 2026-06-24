@@ -59,6 +59,8 @@ export const DEFAULT_BOT_CONFIG = {
   trailR: 0, // trail the stop trailR (in R) behind the best price (0 = off)
   mtfConfirm: true, // require the higher-TF (6h) trend to agree — biggest edge lift
   maxPositions: 4, // max concurrent bot trades
+  maxPerDirection: 3, // correlation cap: max trades in the SAME direction at once
+  confSizing: true, // scale risk by signal confidence (~0.6× weak … 1.4× strong)
   minNotional: 50, // skip trades smaller than this (USD)
   minStopPct: 0.004, // floor for stop distance (0.4% of price)
   cooldownSec: 90, // wait after closing a symbol before re-entering

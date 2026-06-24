@@ -84,6 +84,8 @@ export async function updateConfig(patch) {
   if (patch.beAtR != null) next.beAtR = num(patch.beAtR, 0, 10, config.beAtR);
   if (patch.trailR != null) next.trailR = num(patch.trailR, 0, 10, config.trailR);
   if (patch.mtfConfirm != null) next.mtfConfirm = !!patch.mtfConfirm;
+  if (patch.maxPerDirection != null) next.maxPerDirection = Math.round(num(patch.maxPerDirection, 1, 8, config.maxPerDirection));
+  if (patch.confSizing != null) next.confSizing = !!patch.confSizing;
   if (patch.maxPositions != null) next.maxPositions = Math.round(num(patch.maxPositions, 1, 8, config.maxPositions));
   if (patch.loopSec != null) next.loopSec = Math.round(num(patch.loopSec, 5, 120, config.loopSec));
   const loopChanged = next.loopSec !== config.loopSec;
@@ -109,7 +111,16 @@ async function sizeTrade(signal) {
   const slDist = Math.abs(price - signal.sl);
   if (!(slDist > 0)) return 0;
 
-  const riskAmount = equity * (config.riskPct / 100);
+  // Confidence-weighted risk: scale the risked % between ~0.6× (signal at the
+  // confidence floor) and ~1.4× (a 100%-confidence signal), so stronger setups
+  // get more size and marginal ones less.
+  let riskPct = config.riskPct;
+  if (config.confSizing) {
+    const span = Math.max(1, 100 - config.confidenceMin);
+    const t = Math.max(0, Math.min(1, (signal.confidence - config.confidenceMin) / span));
+    riskPct = config.riskPct * (0.6 + 0.8 * t);
+  }
+  const riskAmount = equity * (riskPct / 100);
   let qty = riskAmount / slDist;
 
   // Cap concentration so several positions can coexist.
@@ -288,6 +299,10 @@ async function scan() {
           }
           signals.set(s.symbol, sig);
           const cd = cooldownUntil.get(s.symbol);
+          // Correlation guard: cap how many trades sit in the SAME direction.
+          // The 8 symbols are highly correlated, so N shorts ≈ one big short —
+          // this stops the bot piling all-in one way.
+          const sameDir = openTrades.filter((t) => t.side === sig.side).length;
           const canOpen =
             enabled &&
             sig.confidence >= config.confidenceMin &&
@@ -295,6 +310,7 @@ async function scan() {
             mtfOk &&
             !openSymbols.has(s.symbol) &&
             openTrades.length < config.maxPositions &&
+            sameDir < (config.maxPerDirection ?? config.maxPositions) &&
             !(cd && cd > now);
           if (canOpen) {
             await openTrade(sig);
