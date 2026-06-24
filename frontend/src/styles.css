@@ -200,6 +200,7 @@ body {
   flex-direction: column;
   gap: 10px;
   min-height: 0;
+  min-width: 0; /* allow grid/flex children (e.g. the canvas) to shrink, not overflow */
   overflow: hidden;
 }
 .col-center {
@@ -251,6 +252,15 @@ body {
 }
 .btn-ghost {
   background: transparent;
+}
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.nav-btn.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent);
 }
 
 /* ----------------------------- Market Watch ----------------------------- */
@@ -365,9 +375,11 @@ body {
   position: relative;
   flex: 1;
   min-height: 220px;
+  overflow: hidden;
 }
 .chart-wrap canvas {
   display: block;
+  max-width: 100%;
 }
 .chart-loading {
   position: absolute;
@@ -808,6 +820,25 @@ body {
   padding: 9px 12px 5px;
   font-weight: 600;
 }
+.history-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.see-all {
+  background: transparent;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  text-transform: none;
+  padding: 0;
+}
+.see-all:hover {
+  text-decoration: underline;
+}
 .bot-trades {
   display: flex;
   flex-direction: column;
@@ -949,6 +980,120 @@ body {
   border-top: 1px solid var(--border);
 }
 
+/* ----------------------------- Bot history view ----------------------------- */
+.history-view {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px clamp(12px, 4vw, 36px) 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+.history-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.history-head h1 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+}
+.history-count {
+  color: var(--text-faint);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.back-btn {
+  font-weight: 600;
+}
+
+.history-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+.hs-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.hs-card span {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-faint);
+}
+.hs-card b {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.history-filters {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.chip-group {
+  display: flex;
+  gap: 4px;
+}
+.chip {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  border-radius: 7px;
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.chip.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.filter-note {
+  font-size: 10.5px;
+  color: var(--text-faint);
+  margin-left: auto;
+}
+
+.history-table-wrap {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.history-table th.r,
+.history-table td.r {
+  text-align: right;
+}
+.history-table tbody tr {
+  cursor: default;
+}
+
+.history-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+.pager-info {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
 /* ----------------------------- Toast ----------------------------- */
 .toast {
   position: fixed;
@@ -1000,12 +1145,144 @@ body {
   background: transparent;
 }
 
+/* ----------------------------- Responsive ----------------------------- */
+/* Tablet / narrow: stack the three columns, let the page scroll, and give the
+   formerly flex-sized panels real heights so they don't collapse. */
 @media (max-width: 1100px) {
+  html,
+  body,
+  #root {
+    height: auto;
+  }
+  .app {
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+  }
   .layout {
     grid-template-columns: 1fr;
-    overflow: auto;
-  }
-  .col {
+    height: auto;
     overflow: visible;
+  }
+  .col,
+  .col-right {
+    overflow: visible;
+  }
+  .col-watch .panel {
+    max-height: 360px;
+  }
+  .chart-panel {
+    flex: none;
+    height: 360px;
+  }
+  .blotter {
+    flex: none;
+    height: 300px;
+    min-height: 0;
+  }
+  .positions {
+    flex: none;
+    max-height: 320px;
+  }
+  .bot-panel {
+    flex: none;
+  }
+}
+
+/* Phone: compact top bar, wrapping stats, and the history table reflows into
+   labelled cards. */
+@media (max-width: 640px) {
+  body {
+    font-size: 13px;
+  }
+  .topbar {
+    height: auto;
+    flex-wrap: wrap;
+    gap: 10px 14px;
+    padding: 10px 12px;
+  }
+  .brand-sub {
+    display: none;
+  }
+  .stats {
+    order: 3;
+    width: 100%;
+    margin-left: 0;
+    gap: 18px;
+  }
+  .stat-value {
+    font-size: 13px;
+  }
+  .topbar-right {
+    margin-left: auto;
+    gap: 8px;
+  }
+  .layout {
+    padding: 8px;
+    gap: 8px;
+  }
+  .chart-panel {
+    height: 300px;
+  }
+  .chart-wrap {
+    min-height: 180px;
+  }
+  .chart-panel .panel-head {
+    flex-wrap: wrap;
+    gap: 8px 10px;
+  }
+  .chart-title {
+    flex-wrap: wrap;
+    gap: 6px 10px;
+  }
+  .chart-foot {
+    gap: 12px 18px;
+    flex-wrap: wrap;
+  }
+  .interval-tabs {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .history-summary {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .history-head h1 {
+    font-size: 17px;
+  }
+  .filter-note {
+    display: none;
+  }
+  /* Table -> stacked cards using the per-cell data-label. */
+  .history-table thead {
+    display: none;
+  }
+  .history-table,
+  .history-table tbody,
+  .history-table tr,
+  .history-table td {
+    display: block;
+    width: 100%;
+  }
+  .history-table tr {
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .history-table td,
+  .history-table td.r {
+    border: none;
+    padding: 3px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    text-align: right;
+  }
+  .history-table td::before {
+    content: attr(data-label);
+    color: var(--text-faint);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    margin-right: 14px;
   }
 }

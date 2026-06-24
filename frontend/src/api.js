@@ -24,4 +24,6 @@ export const api = {
   getBot: () => req('GET', '/api/bot'),
   toggleBot: (enabled) => req('POST', '/api/bot/toggle', { enabled }),
   setBotConfig: (config) => req('POST', '/api/bot/config', config),
+  getBotHistory: (limit = 50, offset = 0) =>
+    req('GET', `/api/bot/history?limit=${limit}&offset=${offset}`),
 };

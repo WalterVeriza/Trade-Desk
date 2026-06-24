@@ -7,6 +7,7 @@ import OrderTicket from './components/OrderTicket.jsx';
 import Positions from './components/Positions.jsx';
 import Blotter from './components/Blotter.jsx';
 import StrategyBot from './components/StrategyBot.jsx';
+import BotHistory from './components/BotHistory.jsx';
 
 const MAX_SPARK = 60;
 
@@ -41,6 +42,7 @@ export default function App() {
     timeframes: [],
   });
   const [selected, setSelected] = useState('BTCUSDT');
+  const [view, setView] = useState('desk'); // desk | history
   const [status, setStatus] = useState('connecting'); // connecting | live | offline
   const [toast, setToast] = useState(null);
   const wsRef = useRef(null);
@@ -209,7 +211,16 @@ export default function App() {
 
   return (
     <div className="app">
-      <TopBar metrics={metrics} status={status} onReset={handleReset} />
+      <TopBar
+        metrics={metrics}
+        status={status}
+        onReset={handleReset}
+        view={view}
+        onNav={setView}
+      />
+      {view === 'history' ? (
+        <BotHistory stats={bot.stats} onClose={() => setView('desk')} />
+      ) : (
       <div className="layout">
         <section className="col col-watch">
           <MarketWatch
@@ -234,10 +245,17 @@ export default function App() {
             onPlace={handlePlace}
             notify={notify}
           />
-          <StrategyBot bot={bot} market={market} onToggle={handleBotToggle} onConfig={handleBotConfig} />
+          <StrategyBot
+            bot={bot}
+            market={market}
+            onToggle={handleBotToggle}
+            onConfig={handleBotConfig}
+            onShowHistory={() => setView('history')}
+          />
           <Positions positions={positions} market={market} onSelect={setSelected} />
         </section>
       </div>
+      )}
       {toast && <div className={`toast toast-${toast.kind}`}>{toast.message}</div>}
     </div>
   );

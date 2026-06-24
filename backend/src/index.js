@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 
 import { PORT, SYMBOLS, STARTING_CASH, BACKTEST_BARS, BACKTEST_MAX_BARS, SIGNAL_WARMUP } from './config.js';
-import { initDb, getAccount, getPositions, getOrders, closeAllOpenBotTrades, getBotState } from './db.js';
+import { initDb, getAccount, getPositions, getOrders, closeAllOpenBotTrades, getBotState, getBotHistory } from './db.js';
 import { backtestSymbol, backtestAll } from './backtest.js';
 import {
   startMarketFeed,
@@ -159,6 +159,17 @@ app.post('/api/bot/toggle', async (req, res, next) => {
 app.post('/api/bot/config', async (req, res, next) => {
   try {
     res.json(await botUpdateConfig(req.body || {}));
+  } catch (e) {
+    next(e);
+  }
+});
+
+// Full paginated bot trade history (for the dedicated history view).
+app.get('/api/bot/history', async (req, res, next) => {
+  try {
+    const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
+    const offset = Math.max(Number(req.query.offset) || 0, 0);
+    res.json(await getBotHistory({ limit, offset }));
   } catch (e) {
     next(e);
   }

@@ -9,7 +9,7 @@ function Stat({ label, value, cls }) {
   );
 }
 
-export default function TopBar({ metrics, status, onReset }) {
+export default function TopBar({ metrics, status, onReset, view = 'desk', onNav }) {
   const statusText = { live: 'LIVE', connecting: 'CONNECTING', offline: 'RECONNECTING' }[status];
   return (
     <header className="topbar">
@@ -29,6 +29,13 @@ export default function TopBar({ metrics, status, onReset }) {
         <Stat label="Total P&L" value={fmtUsd(metrics.totalPnl)} cls={signClass(metrics.totalPnl)} />
       </div>
       <div className="topbar-right">
+        <button
+          className={`btn btn-ghost nav-btn ${view === 'history' ? 'active' : ''}`}
+          onClick={() => onNav && onNav(view === 'history' ? 'desk' : 'history')}
+          title="Historique des trades du bot"
+        >
+          {view === 'history' ? 'Desk' : 'Historique'}
+        </button>
         <div className={`conn conn-${status}`}>
           <span className="conn-dot" />
           {statusText}

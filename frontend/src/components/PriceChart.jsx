@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { api } from '../api.js';
 import { fmtPrice, fmtPct, signClass } from '../format.js';
 
@@ -44,8 +44,9 @@ export default function PriceChart({ symbol, snapshot }) {
     });
   }, [snapshot?.price]);
 
-  // Draw candlesticks.
-  useEffect(() => {
+  // Draw candlesticks. Wrapped in useCallback so a ResizeObserver can re-run it
+  // when the container changes size (responsive layouts / orientation changes).
+  const draw = useCallback(() => {
     const canvas = canvasRef.current;
     const wrap = wrapRef.current;
     if (!canvas || !wrap || candles.length === 0) return;
@@ -139,7 +140,20 @@ export default function PriceChart({ symbol, snapshot }) {
     ctx.fillRect(padL + plotW, ly - 8, padR, 16);
     ctx.fillStyle = '#0a0e16';
     ctx.fillText(fmtPrice(lastP), padL + plotW + 6, ly);
-  }, [candles, symbol]);
+  }, [candles]);
+
+  // Redraw on data change and whenever the container resizes.
+  useEffect(() => {
+    draw();
+  }, [draw]);
+
+  useEffect(() => {
+    const wrap = wrapRef.current;
+    if (!wrap || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => draw());
+    ro.observe(wrap);
+    return () => ro.disconnect();
+  }, [draw]);
 
   return (
     <div className="panel chart-panel">

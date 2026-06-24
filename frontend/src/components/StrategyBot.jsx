@@ -43,7 +43,7 @@ function TradeCard({ trade, price }) {
   );
 }
 
-export default function StrategyBot({ bot, market, onToggle, onConfig }) {
+export default function StrategyBot({ bot, market, onToggle, onConfig, onShowHistory }) {
   const [open, setOpen] = useState(false);
   const cfg = bot.config || {};
   const stats = bot.stats || {};
@@ -172,7 +172,12 @@ export default function StrategyBot({ bot, market, onToggle, onConfig }) {
 
       {closed.length > 0 && (
         <>
-          <div className="bot-section-label">Recent closes</div>
+          <div className="bot-section-label history-label">
+            <span>Recent closes</span>
+            <button className="see-all" onClick={onShowHistory}>
+              Voir tout l'historique →
+            </button>
+          </div>
           <div className="bot-closed">
             {closed.slice(0, 6).map((t) => (
               <div key={t.id} className="closed-row mono">

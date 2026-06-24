@@ -294,6 +294,21 @@ export async function getRecentClosedBotTrades(limit = 25) {
   return rows.map(mapBotTrade);
 }
 
+// Full closed-trade history, paginated. Excludes administrative closes
+// (dedup/reset/cleanup) so it shows genuine strategy trades, like the stats.
+export async function getBotHistory({ limit = 50, offset = 0 } = {}) {
+  const trades = await sql.query(
+    `SELECT * FROM bot_trades
+     WHERE status='closed' AND COALESCE(exit_reason,'') NOT IN ('dedup','reset','cleanup')
+     ORDER BY closed_at DESC LIMIT $1 OFFSET $2`,
+    [limit, offset]
+  );
+  const cnt = await sql`
+    SELECT COUNT(*)::int AS n FROM bot_trades
+    WHERE status='closed' AND COALESCE(exit_reason,'') NOT IN ('dedup','reset','cleanup')`;
+  return { trades: trades.map(mapBotTrade), total: Number(cnt[0].n), limit, offset };
+}
+
 export async function getBotStats() {
   // Only genuine strategy exits count toward win-rate/P&L. Administrative closes
   // (dedup of a stacked pair, desk reset) are excluded so they don't skew stats.
