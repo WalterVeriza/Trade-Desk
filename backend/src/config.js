@@ -42,19 +42,22 @@ export const SYMBOL_SET = new Set(SYMBOLS.map((s) => s.symbol));
 export const STARTING_CASH = 100000; // USD paper-trading balance
 
 // Strategy bot defaults. Multi-indicator confluence + ATR-based TP/SL.
+// Defaults tuned by a robustness sweep over all 8 symbols (see optimize.js).
+// vs the old 5m/no-filter baseline (PF 1.05, expectancy 0.03R), this 1h +
+// higher-TF-trend-filter profile backtested at PF ~1.44 / expectancy ~0.20R and
+// is positive on all 8 symbols. In-sample over a recent window — re-validate
+// over time; not a guarantee of future edge.
 export const DEFAULT_BOT_CONFIG = {
-  timeframe: '5m', // candle timeframe for indicators
-  loopSec: 20, // how often the signal scan runs
+  timeframe: '1h', // candle timeframe for indicators (1h = far less noise than 5m)
+  loopSec: 60, // how often the signal scan runs (1h signals change hourly)
   confidenceMin: 65, // only trade signals at/above this confidence (0-100)
   riskPct: 1, // % of equity risked per trade (drives position size)
-  atrSl: 1.5, // stop-loss distance = atrSl × ATR
-  atrTp: 3, // take-profit distance = atrTp × ATR (R:R ≈ 1:2)
-  adxMin: 20, // regime filter: skip entries when ADX is below this (no trend)
-  beAtR: 0, // move stop to break-even once +beAtR in profit (0 = off)
+  atrSl: 1, // stop-loss distance = atrSl × ATR
+  atrTp: 2, // take-profit distance = atrTp × ATR (R:R = 1:2)
+  adxMin: 25, // regime filter: skip entries when ADX is below this (no trend)
+  beAtR: 1, // move stop to break-even once +1R in profit (cuts avg loss)
   trailR: 0, // trail the stop trailR (in R) behind the best price (0 = off)
-  mtfConfirm: false, // higher-TF trend filter (toggle). Off by default: the
-  // backtest showed it cuts ~20% of trades without raising per-trade edge,
-  // only lowering drawdown — so leave it opt-in rather than on by default.
+  mtfConfirm: true, // require the higher-TF (6h) trend to agree — biggest edge lift
   maxPositions: 4, // max concurrent bot trades
   minNotional: 50, // skip trades smaller than this (USD)
   minStopPct: 0.004, // floor for stop distance (0.4% of price)

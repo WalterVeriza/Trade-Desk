@@ -161,20 +161,25 @@ first boot (`backend/src/db.js`), idempotent.
   managing can't make its TP/SL open an opposite position.
 - **Closed-candle signals.** The bot drops the still-forming candle before
   computing indicators, so signals don't flicker/repaint as the live bar updates.
-- **Regime filter (ADX).** Entries are skipped when ADX is below `adxMin`
-  (default 20) — no trend, no trade — to avoid getting chopped up in ranges.
 - **Backtester.** `GET /api/bot/backtest` replays `computeSignal` over candle
   history with the same TP/SL, reporting expectancy in R — so parameters can be
   tuned against numbers instead of guesswork.
-- **Multi-timeframe filter (`mtfConfirm`, opt-in).** Only trades aligned with the
-  higher-timeframe trend (EMA200 on 1h for a 5m strategy, etc.). It's **off by
-  default**: backtesting showed it cuts ~20% of trades without improving
-  per-trade expectancy, only lowering drawdown — a textbook example of validating
-  an idea before shipping it. Toggle it on and re-run the backtest for your
-  window/regime to decide.
-- **Break-even / trailing stops (`beAtR`, `trailR`, opt-in).** The stop can move
-  to break-even at +`beAtR` (in R) and/or trail `trailR` behind the best price.
-  Also **off by default**: a sweep showed every setting *lowered* expectancy vs a
-  plain fixed 1:2 stop/target — trailing truncates the +2R winners that carry a
-  trend strategy faster than it saves losers. Implemented and tunable, but the
-  data says the simple fixed target wins here.
+- **Tuned defaults (`optimize.js`).** A robustness sweep over **all 8 symbols**
+  and every timeframe picked the current defaults: **1h** candles, `confidenceMin`
+  65, `adxMin` 25, `atrSl` 1 / `atrTp` 2 (R:R 1:2), `beAtR` 1, `mtfConfirm` on.
+  In-sample that profile backtested at **PF ≈ 1.44 / expectancy ≈ 0.20R and was
+  positive on all 8 symbols**, vs the old 5m/no-filter baseline (PF 1.05,
+  expectancy 0.03R). Run `node optimize.js` to reproduce the sweep.
+  > In-sample over a recent window — useful for choosing robust parameters, **not**
+  > a guarantee of future edge. Re-run it periodically as the regime changes.
+- **Regime filter (ADX).** Entries are skipped when ADX is below `adxMin`
+  (default 25) — no trend, no trade — to avoid getting chopped up in ranges.
+- **Multi-timeframe filter (`mtfConfirm`).** Only trades aligned with the
+  higher-timeframe trend (EMA200 on the 6h for the 1h strategy). **On by default:**
+  on 1h the sweep showed it is the single biggest edge lift. (Note: an earlier test
+  *at 5m* found it merely cut trades — the benefit shows up once the base timeframe
+  is 1h, which is why tuning timeframe and filter together mattered.)
+- **Break-even stop (`beAtR`, on) / trailing (`trailR`, off).** Once a trade is
+  +1R onside the stop moves to break-even, which cut average loss to ~0.67R in the
+  backtest. Trailing stays off by default — it truncates the +2R winners that carry
+  a trend strategy faster than it saves losers.
