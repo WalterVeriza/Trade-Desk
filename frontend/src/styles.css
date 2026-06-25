@@ -1090,6 +1090,10 @@ body {
   border: 1px solid var(--border);
   border-radius: 12px;
   overflow: hidden;
+  /* Keep full height inside the flex-column view; without this it shrinks to fit
+     the viewport and overflow:hidden clips the rows (fewer rows on a short
+     screen). At full height the .history-view scrolls instead. */
+  flex-shrink: 0;
 }
 .history-table th.r,
 .history-table td.r {
