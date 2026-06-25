@@ -55,6 +55,9 @@ export const DEFAULT_BOT_CONFIG = {
   atrSl: 1, // stop-loss distance = atrSl × ATR
   atrTp: 2, // take-profit distance = atrTp × ATR (R:R = 1:2)
   adxMin: 25, // regime filter: skip entries when ADX is below this (no trend)
+  minVolPct: 0.01, // volatility filter: skip entries when ATR < 1% of price.
+  // The trend strategy has ~no edge in calm markets (backtest: PF 1.04 below 1%
+  // ATR) and a strong one in volatile ones (PF ~1.85 at/above 1%).
   beAtR: 1, // move stop to break-even once +1R in profit (cuts avg loss)
   trailR: 0, // trail the stop trailR (in R) behind the best price (0 = off)
   mtfConfirm: true, // require the higher-TF (6h) trend to agree — biggest edge lift

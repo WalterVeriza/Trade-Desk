@@ -187,7 +187,7 @@ app.get('/api/bot/backtest', async (req, res, next) => {
       BACKTEST_MAX_BARS
     );
     const cfg = { ...config };
-    for (const k of ['confidenceMin', 'adxMin', 'atrSl', 'atrTp', 'beAtR', 'trailR']) {
+    for (const k of ['confidenceMin', 'adxMin', 'atrSl', 'atrTp', 'beAtR', 'trailR', 'minVolPct']) {
       if (req.query[k] != null && Number.isFinite(Number(req.query[k]))) cfg[k] = Number(req.query[k]);
     }
     if (req.query.mtfConfirm != null) cfg.mtfConfirm = !['0', 'false', 'no'].includes(String(req.query.mtfConfirm).toLowerCase());

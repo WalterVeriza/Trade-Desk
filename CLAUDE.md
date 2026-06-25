@@ -54,6 +54,10 @@ Coinbase REST ─poll 3s→ Backend (Express + ws) ──WebSocket──> React 
   `atrSl` **1** / `atrTp` **2** (R:R 1:2), `beAtR` **1** (break-even, ON),
   `mtfConfirm` **true** (filtre tendance 6h, ON — plus gros gain d'edge), `trailR` 0
   (OFF, tronque les gagnants). À revalider périodiquement (in-sample, sans frais/slippage).
+- **Filtre de volatilité** : `minVolPct` (défaut **0.01**) — n'entre que si ATR ≥ 1%
+  du prix. La stratégie de tendance n'a ~aucun edge en marché calme (backtest :
+  PF 1.04 sous 1% d'ATR, ~60% des trades) et un fort edge au-dessus (PF ≈ 1.85).
+  Plus gros gain validé après le passage en 1h. Filtre aussi BNB (PF 1.0 → 3.6).
 - **Gestion du risque** : `maxPerDirection` (cap d'exposition corrélée, défaut 3),
   `confSizing` (taille pondérée par la confiance ~0.6×→1.4×, ON).
 - **Garde-fou événementiel** (`events.js`) : suspend les NOUVELLES entrées dans une

@@ -83,6 +83,7 @@ export async function updateConfig(patch) {
   if (patch.atrSl != null) next.atrSl = num(patch.atrSl, 0.2, 10, config.atrSl);
   if (patch.atrTp != null) next.atrTp = num(patch.atrTp, 0.2, 20, config.atrTp);
   if (patch.adxMin != null) next.adxMin = num(patch.adxMin, 0, 60, config.adxMin);
+  if (patch.minVolPct != null) next.minVolPct = num(patch.minVolPct, 0, 0.1, config.minVolPct);
   if (patch.beAtR != null) next.beAtR = num(patch.beAtR, 0, 10, config.beAtR);
   if (patch.trailR != null) next.trailR = num(patch.trailR, 0, 10, config.trailR);
   if (patch.mtfConfirm != null) next.mtfConfirm = !!patch.mtfConfirm;
@@ -313,11 +314,13 @@ async function scan() {
           // The 8 symbols are highly correlated, so N shorts ≈ one big short —
           // this stops the bot piling all-in one way.
           const sameDir = openTrades.filter((t) => t.side === sig.side).length;
+          const volPct = sig.price ? (sig.atr ?? 0) / sig.price : 0;
           const canOpen =
             enabled &&
             !bo &&
             sig.confidence >= config.confidenceMin &&
             (sig.adx ?? 0) >= config.adxMin &&
+            volPct >= (config.minVolPct ?? 0) &&
             mtfOk &&
             !openSymbols.has(s.symbol) &&
             openTrades.length < config.maxPositions &&

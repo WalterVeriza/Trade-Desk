@@ -61,7 +61,8 @@ export function simulate(candles, cfg, htfBias = null) {
     }
     if (!pos) {
       const sig = computeSignal(candles.slice(0, i + 1), cfg);
-      if (sig && sig.confidence >= cfg.confidenceMin && (sig.adx ?? 0) >= (cfg.adxMin ?? 0)) {
+      const volOk = sig && (!cfg.minVolPct || (sig.price ? sig.atr / sig.price : 0) >= cfg.minVolPct);
+      if (sig && volOk && sig.confidence >= cfg.confidenceMin && (sig.adx ?? 0) >= (cfg.adxMin ?? 0)) {
         const biasOk =
           !cfg.mtfConfirm || !htfBias || (sig.side === 'long' ? htfBias[i] > 0 : htfBias[i] < 0);
         if (biasOk) {

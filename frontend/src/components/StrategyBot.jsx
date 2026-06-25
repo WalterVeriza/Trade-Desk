@@ -126,6 +126,17 @@ export default function StrategyBot({ bot, market, onToggle, onConfig, onShowHis
             />
           </label>
           <label className="field">
+            <span>Volatilité min ({((cfg.minVolPct ?? 0) * 100).toFixed(1)}% ATR)</span>
+            <input
+              type="range"
+              min="0"
+              max="0.02"
+              step="0.001"
+              value={cfg.minVolPct ?? 0}
+              onChange={(e) => onConfig({ minVolPct: Number(e.target.value) })}
+            />
+          </label>
+          <label className="field">
             <span>Risk / trade ({cfg.riskPct}%)</span>
             <input
               type="range"
