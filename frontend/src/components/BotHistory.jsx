@@ -50,9 +50,11 @@ export default function BotHistory({ stats = {}, onClose }) {
       .finally(() => setLoading(false));
   }, []);
 
+  // Reload on page change AND whenever a new trade closes (stats.trades grows via
+  // the live WS feed) so the list never lags behind the header count.
   useEffect(() => {
     load(offset);
-  }, [offset, load]);
+  }, [offset, load, stats.trades]);
 
   const rows = useMemo(() => {
     return (data.trades || []).filter((t) => {

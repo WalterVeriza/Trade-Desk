@@ -49,9 +49,17 @@ Coinbase REST ─poll 3s→ Backend (Express + ws) ──WebSocket──> React 
 ## Bot & backtest
 
 - Signaux calculés sur **bougies clôturées** (la bougie en cours est dropée).
-- Filtres **opt-in, OFF par défaut** car le backtest n'a pas montré de gain :
-  régime ADX (`adxMin`, on), multi-timeframe (`mtfConfirm`, off), break-even/trailing
-  (`beAtR`/`trailR`, off). L'edge tient au R:R 1:2 + ADX.
+- **Défauts optimisés** (sweep `optimize.js` sur les 8 symboles, in-sample PF ≈ 1.44 /
+  expectancy ≈ 0.20R, positif sur 8/8) : `timeframe` **1h**, `adxMin` **25**,
+  `atrSl` **1** / `atrTp` **2** (R:R 1:2), `beAtR` **1** (break-even, ON),
+  `mtfConfirm` **true** (filtre tendance 6h, ON — plus gros gain d'edge), `trailR` 0
+  (OFF, tronque les gagnants). À revalider périodiquement (in-sample, sans frais/slippage).
+- **Gestion du risque** : `maxPerDirection` (cap d'exposition corrélée, défaut 3),
+  `confSizing` (taille pondérée par la confiance ~0.6×→1.4×, ON).
+- **Garde-fou événementiel** (`events.js`) : suspend les NOUVELLES entrées dans une
+  fenêtre (`evBeforeMin`/`evAfterMin`, défaut −60/+30) autour d'événements à fort
+  impact. Macro = calendrier FOMC/CPI/NFP codé en dur (UTC, **à rafraîchir ~1×/an**).
+  Crypto = CoinMarketCal, actif seulement si `COINMARKETCAL_KEY` est définie.
 - `GET /api/bot/backtest` rejoue `computeSignal` et renvoie le P&L en **R**
   (overrides : `symbol`, `interval`, `bars`, `confidenceMin`, `adxMin`, `atrSl`,
   `atrTp`, `mtfConfirm`, `beAtR`, `trailR`). In-sample, sans frais/slippage.
