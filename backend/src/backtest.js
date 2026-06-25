@@ -50,7 +50,11 @@ export function simulate(candles, cfg, htfBias = null) {
       }
       if (exit != null) {
         const risk = Math.abs(pos.entry - pos.initSl) || 1;
-        const r = (pos.side === 'long' ? exit - pos.entry : pos.entry - exit) / risk;
+        let r = (pos.side === 'long' ? exit - pos.entry : pos.entry - exit) / risk;
+        // Real-world costs: fee + slippage charged on BOTH legs (entry + exit),
+        // expressed in R. With a ~1×ATR stop this is a meaningful fraction of 1R.
+        const costRate = (cfg.feeRate ?? 0) + (cfg.slipRate ?? 0);
+        if (costRate > 0) r -= (costRate * (pos.entry + exit)) / risk;
         trades.push({ side: pos.side, entry: pos.entry, exit, reason, r, bars: i - pos.entryIdx });
         pos = null;
       } else {
