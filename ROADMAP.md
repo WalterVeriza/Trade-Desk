@@ -36,6 +36,17 @@ Reco : vérifier cTrader sur HFM (B) ; sinon OANDA (A) ou MetaApi/HFM (C). HFM >
 4. **Forward-test sur compte DÉMO** broker, avec l'adaptateur réel branché.
 5. **Seulement après** : réel minuscule (~$100), clés **trade-only** (sans retrait).
 
+## Résultat — baseline forex (stratégie actuelle)
+Outil : `backend/scripts/forex-backtest.js` (feed Yahoo FX gratuit, sans clé/compte ;
+rejoue `simulate`/`computeSignal`). Testé sur **8 paires, ~2 ans de 1h, 619 trades** :
+- **Aucun edge** : agrégat **négatif même brut** (PF 0.91, expR −0.05) et −0.12R net
+  d'un spread serré. Winrate ~24% partout (< 33% requis pour le R:R 1:2).
+- → Le problème est la **stratégie**, pas l'actif. Ne pas porter le trend-confluence
+  tel quel. Prochaine étape : tester d'autres archétypes (mean-reversion sur majors,
+  breakout de session Londres/NY, TF 4h/daily) avec ce même harness, garder seulement
+  ce qui est positif **net de coûts ET en walk-forward**. Un edge peut ne pas exister
+  (résultat valide qui économise du capital).
+
 ## Garde-fous
 L'assistant ne saisit aucune clé/identifiant, n'exécute aucun ordre réel, ne donne pas
 de conseil en investissement. Capital réel = à haut risque, budget d'apprentissage.
