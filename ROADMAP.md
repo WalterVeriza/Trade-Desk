@@ -47,6 +47,17 @@ rejoue `simulate`/`computeSignal`). Testé sur **8 paires, ~2 ans de 1h, 619 tra
   ce qui est positif **net de coûts ET en walk-forward**. Un edge peut ne pas exister
   (résultat valide qui économise du capital).
 
+### Comparatif 3 archétypes — `backend/scripts/forex-research.js`
+Agrégat 8 paires, ~2 ans, net de ~1.5 bps/jambe :
+- **Mean-reversion** (Bollinger+RSI fade, cible = moyenne) : −0.22R, mort partout. Abandonné.
+- **Trend daily** : −0.07R ; les paires positives sont sur 10-13 trades = bruit. Pas d'edge.
+- **Breakout de session** (range asiatique 00-07 UTC, trigger Londres/NY, R:R 1.5) :
+  −0.08R agrégat MAIS **pile au breakeven** (40% win = seuil) et **USDJPY franchement
+  positif** (227 trades, 48% win, PF 1.25, +0.14R). **Seule piste à creuser.**
+- **Prochaine étape** : raffiner le breakout (fenêtre de session, R:R, filtre de tendance,
+  sélection de paires) et **valider en walk-forward** avant d'y croire. Éviter le
+  cherry-picking d'USDJPY.
+
 ## Garde-fous
 L'assistant ne saisit aucune clé/identifiant, n'exécute aucun ordre réel, ne donne pas
 de conseil en investissement. Capital réel = à haut risque, budget d'apprentissage.
